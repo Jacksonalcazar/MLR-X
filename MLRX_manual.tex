@@ -84,15 +84,34 @@ The distributed builds are self-contained. Choose the appropriate build and foll
   \item \textbf{macOS GUI}: open the signed package and drag the app to \texttt{/Applications}.
 \end{itemize}
 
-\subsection{Notes about the source code}
-The file \texttt{MLRX\_source.py} documents the internal logic but is not intended for direct installation. For support and stability, use only the official builds listed above.
-
 % =========================================================
 \section{Quick start}
 \subsection{Launch the graphical interface}
 \begin{itemize}
   \item \textbf{Windows GUI / macOS GUI}: run the \emph{MLR-X} application or shortcut. No extra parameters are required.
-  \item \textbf{Linux}: from a terminal, move to the binary location and run \verb|./MLR-X|.
+  \item \textbf{Linux}: from a terminal, move to the binary location and run \verb|./MLR-X|. To create a desktop launcher:
+  \begin{enumerate}[label=\arabic*.]
+    \item Build the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
+\begin{verbatim}
+sudo mkdir -p /opt/MLRX
+sudo cp MLRX /opt/MLRX/
+sudo cp icon/icon.ico /opt/MLRX/
+\end{verbatim}
+    \item Update the Exec and Icon paths in \verb|MLRX.desktop| if you choose a different installation directory.
+    \item Install the launcher by copying it to your applications directory and mark the file as executable:
+\begin{verbatim}
+chmod +x MLRX.desktop
+cp MLRX.desktop ~/.local/share/applications/
+# or for all users:
+# sudo cp MLRX.desktop /usr/share/applications/
+\end{verbatim}
+    \item Refresh the desktop launcher database (optional but recommended):
+\begin{verbatim}
+update-desktop-database ~/.local/share/applications
+# or sudo update-desktop-database /usr/share/applications
+\end{verbatim}
+    \item The registered launcher will appear in your desktop application menu and can be pinned to the dock or panel depending on your environment.
+  \end{enumerate}
 \end{itemize}
 The application preloads heavy libraries in the background to improve first-response time.
 
