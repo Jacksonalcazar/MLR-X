@@ -1,0 +1,630 @@
+% !TeX program = pdflatex
+\documentclass[12pt,a4paper]{article}
+
+% ==== Base packages ====
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{csquotes}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{fancyhdr}
+
+% ==== Styles ====
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black,
+  pdfauthor={MLR-X Team},
+  pdftitle={End-User Operator Manual – MLR-X},
+  pdfcreator={MLR-X}
+}
+
+\lstdefinestyle{mlrx}{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible
+}
+
+\setlist{nosep,leftmargin=2.1em}
+\onehalfspacing
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{End-User Operator Manual — MLR-X 1.0}
+\rhead{\thepage}
+
+\titleformat{\section}{\Large\bfseries}{\thesection}{0.5em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.5em}{}
+
+% ==== Cover ====
+\title{\vspace{-1.2cm}\textbf{MLR-X 1.0}\\End-User Operator Manual}
+\author{MLR-X Team}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\textit{This document describes the operational use of the MLR-X desktop application for data preparation, multiple linear regression (MLR) model search, validation, diagnostics, visualization, reporting, and command-line (CLI) automation.}
+\end{center}
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Overview}
+MLR-X is a desktop application (Tkinter) that guides users through preparing a \texttt{CSV} file, choosing the dependent variable, and filtering columns before launching an automatic search of multiple linear regression models. Everything is coordinated from the \textbf{Setup} tab, where you load data, set the delimiter, and \emph{start or cancel} analyses.
+
+When a sweep finishes, the \textbf{Models} tab lists the combinations found (sorted by key metrics) and lets you \emph{reload saved results} to keep exploring without recomputation.
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{120pt}\hspace{0.9\linewidth}}
+  \caption{Main window overview: title \emph{``MLR-X 1.0''} (1000$\times$720 px) with tabbed notebook.}
+  \label{fig:main-window}
+\end{figure}
+
+\subsection{Main tabs}
+\begin{longtable}{@{}p{3cm}p{11.2cm}@{}}
+\toprule
+\textbf{Tab} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tab} & \textbf{Purpose} \\
+\midrule
+\endhead
+Setup &
+Data loading and parameters: search method, sorting target, prediction clipping options, and saving configuration. Starting point of the workflow.\\
+Models &
+Results tables for training, internal and external validations (independent scrollable views). Metrics like R$^2$, RMSE, Q$^2$ per model.\\
+Validation &
+Choose which models to revalidate (top, multiple, all). Enable LOO or \emph{k}-fold. Run external validations on a different CSV; separate status lines per process.\\
+Diagnostics &
+Observation-level residuals and hat values, train/test filters, and downloadable correlation summaries to investigate outliers after selecting a specific model.\\
+Visualization &
+Preset plots (heatmaps, Predicted vs Actual, QQ, Williams, etc.), style controls, and legends to interpret the selected model visually.\\
+Summary &
+Generates a dossier-like report with global metrics, model information, and exportable equations.\\
+Desktop (Variable Explorer) &
+Reload data and results, choose variables for axes or model ranges, customize colors/markers/labels, and export figures.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Persistent state and performance}
+\begin{itemize}
+  \item MLR-X \textbf{retains} last results, analysis context, configurations, and derived metrics so specialized tabs can be reactivated without recalculation.
+  \item An \textbf{event queue} and \textbf{worker thread} keep the UI responsive; progress, logs, and final results update as soon as they are ready.
+  \item \textbf{Caches} for observations and correlations reduce waiting time when reopening diagnostics or visualizations within the same run.
+\end{itemize}
+
+% =========================================================
+\section{System requirements and installation}
+\subsection{Requirements}
+\begin{itemize}
+  \item Python environment with Tk/Tcl graphics support for Tkinter.
+  \item Libraries: \texttt{NumPy}, \texttt{pandas}, \texttt{statsmodels}, \texttt{scikit-learn}, \texttt{Matplotlib}, \texttt{joblib}.
+\end{itemize}
+
+\subsection{Recommended installation}
+\begin{enumerate}
+  \item Create and activate a \textbf{virtual environment} (\texttt{python -m venv} or \texttt{conda}).
+  \item Install dependencies:
+\begin{lstlisting}[style=mlrx]
+pip install numpy pandas statsmodels scikit-learn matplotlib joblib
+\end{lstlisting}
+  \item Verify Tkinter:
+\begin{lstlisting}[style=mlrx]
+python -m tkinter
+\end{lstlisting}
+\end{enumerate}
+
+% =========================================================
+\section{Quick start}
+\subsection{Launch the GUI}
+\begin{lstlisting}[style=mlrx]
+python MLRX.py
+\end{lstlisting}
+The app creates an \texttt{MLRXApp} instance and enters the Tkinter main loop.
+
+% =========================================================
+\section{User interface tour}
+\subsection{\textbf{Setup} tab}
+\paragraph{\emph{Dataset} group}
+\begin{enumerate}[label=\arabic*.]
+  \item Specify the CSV (\emph{CSV file}) or click \emph{Browse}.
+  \item \emph{Run analysis} starts the sweep; \emph{Preview data} shows a quick dataset summary; \emph{Cancel} stops execution.
+  \item Set the \emph{CSV delimiter}, choose the \emph{dependent variable}, and mark \emph{non-predictor} columns.
+  \item Enable \emph{Exclude near-constant predictors} and set the threshold (\%).
+  \item Exclude rows using IDs/ranges in \emph{Exclude observations (IDs)} (e.g., \texttt{3,9,4-8}).
+  \item Load/progress status appears in the upper-right corner of the box.
+\end{enumerate}
+
+\paragraph{\emph{Data splitting} group}
+\begin{itemize}
+  \item \emph{No split}: use the entire dataset.
+  \item \emph{Random split}: define \emph{Test size (\%)}.
+  \item \emph{Manual split}: lists/ranges of IDs for \textit{train}/\textit{test}.
+\end{itemize}
+
+\paragraph{\emph{Settings} group}
+\begin{enumerate}[label=\arabic*.]
+  \item Model search method: \textbf{EPR-S} or \textbf{All Subsets} (info via \emph{ℹ}).
+  \item Key parameters: \emph{Max predictors}, \emph{Seeds}, \emph{Seed size}, statistical levels, \emph{export limits}, parallel jobs.
+  \item Sorting target (R$^2$, adjusted R$^2$, or Q$^2$), \emph{covariance type}, prediction \emph{clipping}, and recommended buttons.
+  \item Tooltips (ℹ) on every critical field.
+\end{enumerate}
+
+\subsection{Built-in validations and aids}
+\begin{itemize}
+  \item \emph{Preview data} reloads using the current configuration and previews train/test counts, response column, and first predictors; any read issue raises an error dialog.
+  \item When starting analysis or saving a configuration, the app validates dataset paths, positive limits, integers, and warns on inverted clipping ranges.
+  \item For splitting, the app enforces numeric 0–100 percentages, valid manual IDs, and an existing external file when chosen.
+\end{itemize}
+
+\subsection{Recommended practices}
+\begin{itemize}
+  \item \textbf{Seeds}: at least as many as predictors; use the \emph{Recommended} button.
+  \item \textbf{Seed size}: around half of \emph{Max predictors}.
+  \item \textbf{VIF threshold}: keep $<5$.
+  \item \textbf{Correlation threshold}: 0–1; \textbf{Significance level}: 0.05 as a baseline.
+\end{itemize}
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{120pt}\hspace{0.9\linewidth}}
+  \caption{\textbf{Setup} tab: \emph{Dataset}, \emph{Data splitting}, and \emph{Settings} groups.}
+  \label{fig:setup}
+\end{figure}
+
+% =========================================================
+\section{Running analyses and process management}
+\subsection{Before you start}
+\begin{enumerate}
+  \item Load the dataset (\emph{Open dataset}) and verify the preview.
+  \item Review delimiter, response, exclusions, validation choices, and filters.
+  \item Choose the export destination (\texttt{models.csv} by default).
+\end{enumerate}
+
+\subsection{Start the analysis}
+\begin{enumerate}
+  \item Ensure no other run is active.
+  \item Click \emph{Run analysis} and confirm the results file path.
+  \item The app validates the destination and reloads the dataset using your settings.
+  \item Status switches to \emph{Running}, prior results are cleared, and the log starts.
+\end{enumerate}
+
+\subsection{Progress, cancellation, incidents}
+\begin{itemize}
+  \item \textbf{Progress}: bottom-right bar (\%) and \emph{Log} with evaluated models and events.
+  \item \textbf{Cancel}: switches to \emph{Cancelling…} while jobs are gracefully stopped.
+  \item \textbf{Errors}: dialog with cause and overall \emph{Error} state.
+\end{itemize}
+
+\subsection{Results and metadata}
+\begin{enumerate}
+  \item The CSV is written to the confirmed path (\texttt{models.csv} by default).
+  \item First line: a JSON metadata block between \verb|#EPRS-S ... ;#|.
+  \item The last confirmed export path is kept as the default for future runs.
+\end{enumerate}
+
+% =========================================================
+\section{Understanding the \textbf{Models} tab}
+The \textbf{Models} (or \textbf{Results}) tab groups three main tables and an \textit{observation diagnostics} view. They share the model ID and predictor list; each focuses on different metrics.
+
+\subsection{Top models (training)}
+\textbf{Columns}: \emph{Model}, \emph{Predictors}, \emph{N pred}, R$^2$ (train), RMSE (train), $s$ (train), MAE (train), adjusted R$^2$, VIF max, VIF avg.\\
+\textbf{How to read}: balance R$^2$/adj-R$^2$; compare RMSE/MAE/$s$; check VIF; watch \emph{N pred}.\\
+\textbf{Relation}: selection feeds \textbf{Validation} and \textbf{Diagnostics}.
+
+\subsection{Internal validation (cross-validation)}
+\textbf{Columns}: \emph{Model}, \emph{Predictors}, \emph{N pred}, Q$^2$/RMSE/MAE/$s$ for LOO and for \emph{k}-fold.\\
+\textbf{Relation}: launched from \textbf{Validation}; results populate this table.
+
+\subsection{External validation}
+\textbf{Columns}: \emph{Model}, \emph{Predictors}, \emph{N pred}, Q$^2_\mathrm{F3}$, RMSE (ext), MAE (ext), Q$^2_\mathrm{F2}$, Q$^2_\mathrm{F1}$.
+
+\subsection{Observation diagnostics}
+\textbf{Columns}: \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Hat}, \emph{Std. residual}, \emph{Std. residual by LOO}.
+
+\subsection{Sorting and refresh}
+\begin{itemize}
+  \item \textbf{Sorted by} syncs ordering across all tables.
+  \item \textbf{Max rows} caps visible/exported rows (default up to 5000).
+  \item Any action affecting metrics (sorting, added validations, external evaluation) \emph{synchronizes} \textbf{Results}, \textbf{Summary}, \textbf{Validation}, and \textbf{Diagnostics}.
+\end{itemize}
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{140pt}\hspace{0.9\linewidth}}
+  \caption{\textbf{Models} tab: training, internal, and external validation tables.}
+  \label{fig:models}
+\end{figure}
+
+% =========================================================
+\section{Internal and external validation (\textbf{Validation})}
+\subsection{Model selection and LOO/\emph{k}-fold}
+\begin{itemize}
+  \item \textbf{Model selection}: \emph{Top models} (with limit), \emph{Multiple models} (lists/ranges: \texttt{1-5,7,9}), or \emph{All models}.
+  \item \textbf{Internal validation}: LOO (default) and \emph{k}-fold (enables \emph{Folds} and \emph{Repeats}).
+  \item Status displayed next to \emph{Run internal validation}.
+\end{itemize}
+
+\subsection{Execution and interpretation}
+\begin{itemize}
+  \item Requires models in memory.
+  \item Validates that at least one method is selected and integer fields are plausible (\emph{folds} $\ge 2$, \emph{repeats} $\ge 1$, \emph{folds} $\le n$).
+  \item The log reports how many models and which schemes; on finish, it summarizes totals and warnings.
+\end{itemize}
+
+\subsection{External validation flow}
+\begin{enumerate}
+  \item Provide the holdout CSV and its delimiter (\verb|;|, \verb|,|, tab, \verb/|/).
+  \item Checks: non-empty file, same response column as training.
+  \item Choose models as in internal validation; the \emph{External validation} status summarizes results.
+\end{enumerate}
+
+% =========================================================
+\section{\textbf{Summary} tab and reporting}
+\subsection{Layout}
+Top \emph{Model selection} block (model list, status, \emph{Use recommended covariance}, \emph{Export Summary…}) and a main pane with a full-width, scrollable text box.
+
+\subsection{Content and metrics}
+\begin{itemize}
+  \item Re-estimates OLS on model change, reports \emph{covariance type}, and rebuilds the coefficients table (SE, $t$, $p$, CIs).
+  \item \textbf{Training}: R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF max, predictor correlations.
+  \item \textbf{Internal}: LOO/\emph{k}-fold averages (with repetition notes).
+  \item \textbf{External}: Q$^2_\mathrm{F1,F2,F3}$, RMSE, MAE.
+  \item \textbf{Advanced}: $F$ and $p$, log-likelihood, AIC, BIC, Omnibus/JB, skewness, kurtosis, Durbin–Watson, condition number, Lin’s concordance coefficient, etc.
+\end{itemize}
+
+\subsection{Recommended covariance}
+\begin{itemize}
+  \item \emph{Use recommended covariance} runs BP/White and leverage checks; if heteroskedasticity or high leverage is detected, applies a robust estimator (HC3 by default).
+  \item \emph{Covariance Diagnostics} documents tests, suggested/applied type, and rationale.
+\end{itemize}
+
+\subsection{Export}
+\emph{Export Summary…} saves the entire text content to \texttt{.txt} (file name includes the model ID).
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{120pt}\hspace{0.9\linewidth}}
+  \caption{\textbf{Summary} tab: example dossier with metrics and equation.}
+  \label{fig:summary}
+\end{figure}
+
+% =========================================================
+\section{Diagnostics for observations and correlations}
+\subsection{Selection and dataset filters}
+\begin{itemize}
+  \item \textbf{Setup}: choose dataset and exclusions (IDs, near-constant) before running.
+  \item \textbf{Data splitting}: \emph{none}/\emph{random}/\emph{manual}/\emph{external}.
+  \item \textbf{Diagnostics}: \emph{Dataset} filter (Training/Testing/Both) with holdout validation.
+  \item \textbf{Visualization}: shares dataset selector and validation logic.
+  \item Automatic propagation of the \emph{holdout ready} state across tabs.
+\end{itemize}
+
+\subsection{Diagnostic columns}
+\begin{itemize}
+  \item \textbf{Observation/Set}: normalized ID and membership.
+  \item \textbf{Actual vs Predicted} and \textbf{Predicted (LOO)}.
+  \item \textbf{Residual} and \textbf{Residual (LOO)}.
+  \item \textbf{Z value} (studentized), \textbf{Hat} (guide threshold $3(p+1)/n$).
+  \item \textbf{Std. residual} / \textbf{Std. residual by LOO}.
+  \item \textbf{Cook’s distance} / \textbf{Cook’s distance LOO}.
+\end{itemize}
+
+\subsection{Exports and correlations}
+\begin{itemize}
+  \item \emph{Export CSV} enabled only when data are visible; respects the dataset filter.
+  \item Correlation matrix: adds a \emph{Variable} column and uses the lower triangle (no duplicates).
+  \item \emph{Include dependent variable}: enabled only when the extended matrix is ready.
+\end{itemize}
+
+% =========================================================
+\section{Variable exploration and advanced visualizations}
+\subsection{Variable Explorer (Desktop)}
+\paragraph{Loading}
+\begin{itemize}
+  \item \textbf{CSV file / Browse / Load}: pick and load a data file; the file name and load status appear below.
+  \item \textbf{Results file / Browse / Load}: load prior model results to unlock extra features.
+\end{itemize}
+
+\paragraph{Axes and scope}
+\begin{itemize}
+  \item \emph{All variables} or \emph{Only variables of model} (type model ID).
+  \item \emph{X axis} / \emph{Y axis} lists update based on the chosen scope.
+\end{itemize}
+
+\paragraph{Legend, labels, references}
+\begin{itemize}
+  \item \emph{Show legend} and \emph{Legend location}.
+  \item \emph{Label mode} (ID, name, etc.); left-click to toggle labels and drag them; right-click clears all labels.
+  \item \emph{Show linear fit} (optional R$^2$), \emph{Show gridline}, \emph{Partial residuals}.
+\end{itemize}
+
+\paragraph{Appearance and export}
+\begin{itemize}
+  \item \emph{Marker size/color/style}, \emph{X/Y min–max}, \emph{Tick step}, \emph{Aspect ratio} (1, 4:3, 16:9, 9:16).
+  \item \emph{Set axis labels…} and \emph{Save current plot} (PNG/TIFF/PDF/SVG).
+\end{itemize}
+
+\subsection{Visualization — plot types}
+\begin{longtable}{@{}p{6.2cm}p{8.2cm}@{}}
+\toprule
+\textbf{Name in app} & \textbf{What it shows} \\
+\midrule
+Correlation heatmap & Correlations among model predictors (redundancy). \\
+Correlation heatmap (with dependent) & Adds the target variable to the heatmap. \\
+Predicted vs Actual / by LOO & Predictions vs observations (standard and LOO). \\
+Residual vs Actual / by LOO & Residuals vs observed values. \\
+Residuals vs Predictions / by LOO & Residuals vs predictions to spot patterns. \\
+Scale-Location / by LOO & Homoskedasticity via standardized residuals. \\
+Q-Q residuals / by LOO & QQ-plot vs normal (standard/LOO). \\
+Residual distribution / by LOO & Histogram/density of standardized residuals. \\
+Williams plot / by LOO & Studentized residuals vs leverage with $h^*$ cutoffs. \\
+Cook's distance vs leverage / by LOO & Influential observations (Cook + leverage). \\
+Hat-values plot & Leverage per observation and thresholds. \\
+Predicted vs Hat & Leverage vs predictions. \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Common controls}
+\begin{itemize}
+  \item \emph{Show legend} / \emph{Legend location}, \emph{Label mode}, \emph{Show identity line} (e.g., in Predicted vs Actual), $h^*$ line color, \emph{Show linear fit}, \emph{Show gridline}, separate styles for training/testing, synchronized ranges, and export.
+\end{itemize}
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{140pt}\hspace{0.9\linewidth}}
+  \caption{Visualization examples: Predicted vs Actual, QQ residuals, Williams plot.}
+  \label{fig:viz}
+\end{figure}
+
+% =========================================================
+\section{Model search algorithms}
+\subsection{EPR-S (Expand–Perturb–Reduce–Swap)}
+\begin{enumerate}
+  \item \textbf{Objective and start}: choose the target metric (e.g., R$^2$) and an initial predictor set with a size cap.
+  \item \textbf{Expand}: try adding non-included predictors that improve the metric without exceeding \emph{Max predictors}.
+  \item \textbf{Perturb}: 1--1 swaps to escape local optima; keep only improvements.
+  \item \textbf{Reduce}: remove predictors when equal or better quality is achieved (parsimony).
+  \item \textbf{Correlation cleanup}: if $|r|$ exceeds the threshold, drop the less useful variable.
+  \item \textbf{Swap}: controlled re-introductions when they bring improvement; converge when no further gains.
+  \item \textbf{Quality rules}: VIF and \emph{Minimum report R$^2$} filters; unique models kept and sorted.
+\end{enumerate}
+
+\subsection{VIF, reporting threshold, progress}
+\begin{itemize}
+  \item \textbf{VIF threshold}: set in \textbf{Setup} $\rightarrow$ \emph{Settings} (recommended $<5$).
+  \item \textbf{Minimum report R$^2$ (or Q$^2$)}: models below the threshold are not added.
+  \item \textbf{Progress}: seed counter and percentage bar; each completed seed advances the bar.
+\end{itemize}
+
+\subsection{All Subsets}
+\begin{itemize}
+  \item Generates/evaluates all combinations up to \emph{Max predictors}; exact but combinatorial.
+  \item Recommended for $\lesssim25$ predictors; shares VIF/threshold filters with EPR-S.
+\end{itemize}
+
+\subsection{Recommendations}
+\begin{itemize}
+  \item Use \textbf{All Subsets} for small predictor sets when exhaustiveness matters.
+  \item Use \textbf{EPR-S} for larger spaces or when you need speed with quality controls.
+\end{itemize}
+
+% =========================================================
+\section{Results format, metadata, and exports}
+\subsection{Main results CSV}
+\begin{itemize}
+  \item \texttt{models.csv} (separator \verb|;|).
+  \item First line: JSON metadata between \verb|#EPRS-S| and \verb|;#|.
+  \item Rows: model ID, variables, and metrics (R$^2$, RMSE, MAE, $s$, LOO, \emph{k}-fold, external when available) with four decimals.
+\end{itemize}
+
+\subsection{Paths, permissions, reuse}
+\begin{itemize}
+  \item Default: app folder; you can choose a custom destination.
+  \item App checks permissions and file locks.
+  \item \textbf{Variable Explorer} $\rightarrow$ \emph{Results file / Load} restores a session from the JSON header.
+\end{itemize}
+
+\subsection{Complementary exports}
+\paragraph{Filtered datasets}
+\begin{itemize}
+  \item \emph{Create filtered dataset} wizard: choose model or range; preview of included columns (IDs, auxiliaries, target, predictors).
+  \item Suggested name \texttt{model\_\textless id\textgreater\_dataset.csv}; uses the \verb|;| separator.
+\end{itemize}
+
+\paragraph{Figures}
+\begin{itemize}
+  \item \emph{Save current plot}: PNG/TIFF/PDF/SVG with current on-screen configuration.
+  \item Remembers last format; warns if no data are loaded.
+\end{itemize}
+
+% =========================================================
+\section{CLI usage and automation}
+\subsection{\texttt{.conf} file format}
+UTF-8 text with \emph{Label = value} lines, blanks, and \verb|#| comments. Main blocks:
+\begin{itemize}
+  \item \textbf{Dataset path}, \textbf{Delimiter options} (choose among \verb|;|, \verb|,|, tab, \verb/|/).
+  \item \textbf{Dependent variable} and \textbf{Non-variable columns}.
+  \item \textbf{Exclude constant columns}, \textbf{Constant threshold}, \textbf{Excluded observation IDs}.
+  \item \textbf{Search method}, \textbf{Covariance type}, \textbf{Target metric}.
+  \item \textbf{Maximum variables}, \textbf{Top models to export}, \textbf{Parallel jobs}.
+  \item \textbf{Split mode}: \emph{none}/\emph{random}/\emph{manual}/\emph{external} (with associated fields).
+  \item \textbf{Output path}.
+\end{itemize}
+
+\subsection{Execution}
+\begin{lstlisting}[style=mlrx]
+python MLRX.py path/to/config.conf
+\end{lstlisting}
+
+During execution:
+\begin{enumerate}
+  \item Config is confirmed and validated; applied to the dataset.
+  \item Console shows progress (\%) and phases.
+  \item On finish: total models, total time, and whether valid results were found.
+  \item If models exist, the CSV is exported to \textbf{Output path}.
+\end{enumerate}
+
+\subsection{Automation}
+\begin{itemize}
+  \item \textbf{Scheduling}: use \texttt{cron}, Windows Task Scheduler, or shell scripts.
+  \item \textbf{Consistent outputs}: the CSV overwrites; append date/time in a wrapper script for versioning.
+  \item \textbf{Pipeline integration}: the first CSV line summarizes config for easy downstream parsing.
+  \item \textbf{Monitoring}: redirect \emph{stdout/stderr} to log files.
+\end{itemize}
+
+% =========================================================
+\section{EPR-MLR quick guide (CSV prep and splitting)}
+\subsection{Prepare the CSV}
+\paragraph{Minimum content}
+\begin{itemize}
+  \item An ID column (e.g., \emph{ID} or \emph{Sample}).
+  \item At least one numeric predictor.
+  \item The target (dependent) variable.
+\end{itemize}
+\paragraph{Format}
+\begin{itemize}
+  \item CSV (UTF-8) with a consistent separator (comma, semicolon, tab).
+\end{itemize}
+\paragraph{Special columns}
+\begin{itemize}
+  \item Mark \emph{non-variables} (IDs, dates, etc.).
+  \item If absent, the app creates a sequential numeric ID on import.
+\end{itemize}
+\paragraph{Missing values and text}
+\begin{itemize}
+  \item Address missing values; convert categorical text to numeric codes if used as predictors.
+\end{itemize}
+\paragraph{Tip} Validate headers and types in a spreadsheet before importing.
+
+\subsection{Configure import in the app}
+\begin{enumerate}
+  \item Open the app and click \emph{Load data}.
+  \item Choose the CSV; set separator and encoding if needed.
+  \item Select the dependent variable.
+  \item Provide indices/names of non-predictor columns.
+  \item Use \emph{Preview} to confirm interpretation.
+\end{enumerate}
+
+\subsection{Preprocessing options}
+\begin{itemize}
+  \item \emph{Exclude observations}: IDs and ranges.
+  \item \emph{Remove (near-)constants}: tolerance threshold (\% of most frequent value).
+  \item \emph{Convert non-numeric}: columns that cannot be converted are dropped from predictors.
+\end{itemize}
+
+\subsection{Choose a splitting mode}
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}l X X@{}}
+\toprule
+Mode & When to use & Requirements \\
+\midrule
+None & Train on full dataset. & No extra configuration.\\
+Random & Random train/test split. & Define \emph{test size} (e.g., 0.2).\\
+Manual & Full control of train/test. & Lists/ranges of non-overlapping IDs.\\
+External & External holdout file. & Path, delimiter, same columns as training CSV.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Good practices before training}
+\begin{itemize}
+  \item Document exclusions and keep a clean copy of the original CSV.
+  \item Review columns dropped for non-numeric content.
+  \item For external holdout, ensure identical headers and order.
+\end{itemize}
+
+% =========================================================
+\section{Saving configurations and reuse}
+\subsection{Save \texttt{.conf} from the GUI}
+Use the GUI to save the current configuration (\texttt{write\_configuration\_file}) after confirming a path in the save dialog.
+
+\subsection{\texttt{.conf} content}
+Stores data paths, delimiter, dependent variable choice, constant filters, search method, target metric, export limits, clipping options, and splitting settings (random, manual, external). In CLI, \texttt{parse\_configuration\_file} validates required fields and indices.
+
+% --- Placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{110pt}\hspace{0.9\linewidth}}
+  \caption{Saving a configuration and sample \texttt{.conf} layout.}
+  \label{fig:conf}
+\end{figure}
+
+% =========================================================
+\section{Operational best practices}
+\begin{itemize}
+  \item Review parameters before each run and align with dataset structure and project goals.
+  \item Save configurations to enable batch/CLI reproducibility.
+  \item Use \textbf{Diagnostics} and \textbf{Validation} to confirm robustness before decisions.
+\end{itemize}
+
+% =========================================================
+\section{Quick troubleshooting (operational FAQ)}
+\begin{itemize}
+  \item \textbf{GUI does not open}: verify \texttt{python -m tkinter}. Ensure Tk/Tcl is available in your environment.
+  \item \textbf{CSV fails to load}: check path, permissions, and delimiter; try \emph{Preview data}.
+  \item \textbf{No models exported}: review \emph{Minimum report R$^2$}/Q$^2$ and \emph{VIF threshold}.
+  \item \textbf{External validation fails}: the target column must match; CSV must include the same predictors.
+  \item \textbf{Empty plot}: select a valid model/dataset or load results (\emph{Results file}).
+\end{itemize}
+
+% =========================================================
+\section{Glossary}
+\begin{description}[style=unboxed,leftmargin=0cm,labelsep=0.5em,font=\normalfont\bfseries]
+  \item[R$^2$/adj-R$^2$] Coefficient of determination (adjusted accounts for number of predictors).
+  \item[Q$^2$] Out-of-sample predictive power (LOO/\emph{k}-fold).
+  \item[RMSE/MAE/$s$] Root mean squared error, mean absolute error, and model standard error.
+  \item[VIF] Variance Inflation Factor; multicollinearity (recommended $<5$).
+  \item[Hat] Leverage; rule-of-thumb threshold $3(p+1)/n$.
+  \item[Williams plot] Studentized residuals vs leverage with critical $h^*$.
+  \item[HC0–HC3] Heteroskedasticity-robust covariance estimators.
+\end{description}
+
+% =========================================================
+\section{Command reference (summary)}
+\subsection*{GUI}
+\begin{lstlisting}[style=mlrx]
+python MLRX.py
+\end{lstlisting}
+
+\subsection*{CLI}
+\begin{lstlisting}[style=mlrx]
+python MLRX.py path/to/config.conf
+\end{lstlisting}
+
+% --- Final placeholder figure ---
+\begin{figure}[H]
+  \centering
+  \fbox{\rule[0pt]{0pt}{110pt}\hspace{0.9\linewidth}}
+  \caption{Example \textbf{Validation} tab with internal/external status indicators.}
+  \label{fig:validation}
+\end{figure}
+
+\end{document}
