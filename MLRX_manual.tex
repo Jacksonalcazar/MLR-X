@@ -50,7 +50,7 @@
 \maketitle
 
 \begin{center}
-\textit{Manual oficial para las compilaciones 1.0 de MLR-X, cubriendo la aplicación de escritorio (Tkinter), el modo de línea de comandos (CLI), los formatos de salida y las prácticas recomendadas basadas en el código fuente `MLRX\_source.py`.}
+\textit{Manual oficial para las compilaciones 1.0 de MLR-X (Linux, macOS, Windows GUI y Windows GUI+CLI). El código fuente `MLRX\_source.py` sirve solo como referencia técnica; los usuarios finales deben operar exclusivamente con los ejecutables suministrados.}
 \end{center}
 
 \tableofcontents
@@ -67,55 +67,43 @@
 
 \subsection{Distribuciones y compatibilidad}
 \begin{itemize}
-  \item \textbf{Builds disponibles}: binario para Linux, Windows GUI y Windows GUI+CLI; compilación macOS en preparación.
-  \item \textbf{Requisitos del sistema}: Windows, Linux o macOS con soporte Tk/Tcl; CPU multinúcleo recomendado. Las dependencias científicas (NumPy, pandas, statsmodels, scikit-learn, Matplotlib) se cargan en segundo plano para reducir la latencia inicial.
-  \item \textbf{Versión en consola}: el flag \verb|--version| imprime \texttt{MLR-X version 1.0}. 
+  \item \textbf{Builds disponibles}: binarios autocontenidos para Linux, macOS (GUI), Windows GUI y Windows GUI+CLI.
+  \item \textbf{Requisitos del sistema}: Windows, Linux o macOS de 64 bits. No es necesario instalar Python ni dependencias científicas; todo viene incluido en las compilaciones.
+  \item \textbf{Versión en consola}: el flag \verb|--version| imprime \texttt{MLR-X version 1.0} en las builds con CLI (Linux y Windows GUI+CLI).
 \end{itemize}
 
 % =========================================================
 \section{Requisitos e instalación}
-\subsection{Dependencias comunes}
-\begin{itemize}
-  \item Python 3 con Tkinter disponible en el sistema gráfico.
-  \item Bibliotecas: \texttt{numpy}, \texttt{pandas}, \texttt{statsmodels}, \texttt{scikit-learn}, \texttt{matplotlib}, \texttt{joblib}.
-  \item Recursos: MLR-X usará tantos núcleos como permita \texttt{n\_jobs} (mínimo 1).
-\end{itemize}
+Las compilaciones distribuidas son autocontenidas y no requieren instalación de Python ni de bibliotecas adicionales. Seleccione la build adecuada y siga estos pasos:
 
 \subsection{Instalación desde binarios}
 \begin{itemize}
-  \item \textbf{Linux}: descargar el ejecutable publicado y marcarlo como ejecutable si es necesario (\texttt{chmod +x}).
-  \item \textbf{Windows GUI / GUI+CLI}: ejecutar el instalador correspondiente; los metadatos de versión se muestran en las propiedades del archivo.
-  \item \textbf{macOS}: seguir el paquete oficial cuando esté disponible (estado ``coming soon'').
+  \item \textbf{Linux}: descargar el binario, moverlo a una carpeta de trabajo y marcarlo como ejecutable si es necesario (\texttt{chmod +x MLR-X}).
+  \item \textbf{Windows GUI}: ejecutar el instalador y abrir el acceso directo generado para la interfaz gráfica.
+  \item \textbf{Windows GUI+CLI}: ejecutar el instalador; se incluye acceso directo para la GUI y el ejecutable CLI en la ruta de instalación.
+  \item \textbf{macOS GUI}: abrir el paquete firmado y arrastrar la app a \texttt{/Applications}.
 \end{itemize}
 
-\subsection{Instalación desde código fuente}
-\begin{enumerate}
-  \item Crear y activar un entorno virtual (\texttt{python -m venv} o \texttt{conda}).
-  \item Instalar dependencias:
-\begin{lstlisting}[style=mlrx]
-pip install numpy pandas statsmodels scikit-learn matplotlib joblib
-\end{lstlisting}
-  \item Verificar Tkinter:
-\begin{lstlisting}[style=mlrx]
-python -m tkinter
-\end{lstlisting}
-  \item Ejecutar el modo GUI o CLI según se describe en las secciones siguientes.
-\end{enumerate}
+\subsection{Notas sobre el código fuente}
+El archivo \texttt{MLRX\_source.py} documenta la lógica interna, pero no está pensado para instalación directa. Para soporte y estabilidad, utilice únicamente las builds oficiales citadas arriba.
 
 % =========================================================
 \section{Inicio rápido}
 \subsection{Abrir la interfaz gráfica}
-\begin{lstlisting}[style=mlrx]
-python MLRX_source.py
-\end{lstlisting}
-La aplicación inicia la clase principal y precarga las librerías pesadas en un hilo de fondo para mejorar la respuesta inicial.
+\begin{itemize}
+  \item \textbf{Windows GUI / macOS GUI}: ejecutar el acceso directo o la app \emph{MLR-X}. No se requieren parámetros adicionales.
+  \item \textbf{Linux}: desde terminal, ubicarse en la carpeta del binario y ejecutar \verb|./MLR-X|.
+\end{itemize}
+La aplicación precarga las bibliotecas pesadas en segundo plano para mejorar el tiempo de respuesta inicial.
 
 \subsection{Ejecutar el modo CLI}
+Disponible únicamente en las compilaciones con CLI (Linux y Windows GUI+CLI). Ejemplos:
 \begin{lstlisting}[style=mlrx]
-python MLRX_source.py --version
-python MLRX_source.py ruta/al/archivo.conf
+./MLR-X --version          # Linux
+MLR-X.exe --version        # Windows GUI+CLI
+./MLR-X ruta/al/archivo.conf
 \end{lstlisting}
-El primer comando imprime la versión. El segundo carga un archivo de configuración válido y ejecuta todo el flujo en consola.
+El comando con archivo de configuración carga los parámetros definidos y ejecuta el flujo completo en consola.
 
 % =========================================================
 \section{Recorrido de la interfaz (GUI)}
@@ -346,7 +334,7 @@ Los modelos se exportan al CSV especificado con nombres de variables normalizado
 % =========================================================
 \section{Solución de problemas y FAQ}
 \begin{itemize}
-  \item \textbf{La GUI no abre}: comprobar \verb|python -m tkinter| y la disponibilidad de Tk/Tcl.
+  \item \textbf{La GUI no abre}: reinstalar la build correspondiente y verificar que el binario no esté bloqueado por el antivirus.
   \item \textbf{El CSV no carga}: verificar ruta, permisos y delimitador; usar \emph{Preview data}.
   \item \textbf{Sin modelos exportados}: revisar \emph{Minimum report R$^2$/Q$^2$} y \emph{VIF threshold}.
   \item \textbf{Validación externa falla}: la columna objetivo debe coincidir y el CSV debe contener los mismos predictores.
