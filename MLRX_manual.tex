@@ -1,0 +1,375 @@
+% !TeX program = pdflatex
+\documentclass[12pt,a4paper]{article}
+
+% ==== Paquetes base ====
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{csquotes}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+% ==== Estilos ====
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black,
+  pdfauthor={Jackson J. Alcázar},
+  pdftitle={Manual de Usuario y Referencia Técnica -- MLR-X 1.0},
+  pdfcreator={MLR-X}
+}
+
+\lstdefinestyle{mlrx}{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible
+}
+
+\setlist{nosep,leftmargin=2.1em}
+\onehalfspacing
+
+\title{\vspace{-1.2cm}\textbf{MLR-X 1.0}\\Manual de Usuario y Referencia Técnica}
+\author{Jackson J. Alcázar\\Proyecto MLR-X}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\textit{Manual oficial para las compilaciones 1.0 de MLR-X, cubriendo la aplicación de escritorio (Tkinter), el modo de línea de comandos (CLI), los formatos de salida y las prácticas recomendadas basadas en el código fuente `MLRX\_source.py`.}
+\end{center}
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Identidad y alcance}
+\begin{itemize}
+  \item \textbf{Nombre y versión}: MLR-X 1.0 (versión de producto y de archivo 1.0.0.0 en los ejecutables de Windows).
+  \item \textbf{Licencia}: GNU Affero General Public License v3.0 (AGPL-3.0) con derechos 2025 de Jackson J. Alcázar. Los metadatos de las compilaciones Windows replican esta información. 
+  \item \textbf{Público objetivo}: usuarios que requieren ajustar, validar y diagnosticar regresiones lineales múltiples en datasets pequeños o grandes.
+  \item \textbf{Canales oficiales}: repositorio \url{https://github.com/Jacksonalcazar/MLR-X}, issues para soporte en \url{https://github.com/Jacksonalcazar/MLR-X/issues}, manual PDF oficial y donaciones vía PayPal en \url{https://www.paypal.com/donate?business=jacksonalcazar@gmail.com\&currency_code=USD}.
+\end{itemize}
+
+\subsection{Distribuciones y compatibilidad}
+\begin{itemize}
+  \item \textbf{Builds disponibles}: binario para Linux, Windows GUI y Windows GUI+CLI; compilación macOS en preparación.
+  \item \textbf{Requisitos del sistema}: Windows, Linux o macOS con soporte Tk/Tcl; CPU multinúcleo recomendado. Las dependencias científicas (NumPy, pandas, statsmodels, scikit-learn, Matplotlib) se cargan en segundo plano para reducir la latencia inicial.
+  \item \textbf{Versión en consola}: el flag \verb|--version| imprime \texttt{MLR-X version 1.0}. 
+\end{itemize}
+
+% =========================================================
+\section{Requisitos e instalación}
+\subsection{Dependencias comunes}
+\begin{itemize}
+  \item Python 3 con Tkinter disponible en el sistema gráfico.
+  \item Bibliotecas: \texttt{numpy}, \texttt{pandas}, \texttt{statsmodels}, \texttt{scikit-learn}, \texttt{matplotlib}, \texttt{joblib}.
+  \item Recursos: MLR-X usará tantos núcleos como permita \texttt{n\_jobs} (mínimo 1).
+\end{itemize}
+
+\subsection{Instalación desde binarios}
+\begin{itemize}
+  \item \textbf{Linux}: descargar el ejecutable publicado y marcarlo como ejecutable si es necesario (\texttt{chmod +x}).
+  \item \textbf{Windows GUI / GUI+CLI}: ejecutar el instalador correspondiente; los metadatos de versión se muestran en las propiedades del archivo.
+  \item \textbf{macOS}: seguir el paquete oficial cuando esté disponible (estado ``coming soon'').
+\end{itemize}
+
+\subsection{Instalación desde código fuente}
+\begin{enumerate}
+  \item Crear y activar un entorno virtual (\texttt{python -m venv} o \texttt{conda}).
+  \item Instalar dependencias:
+\begin{lstlisting}[style=mlrx]
+pip install numpy pandas statsmodels scikit-learn matplotlib joblib
+\end{lstlisting}
+  \item Verificar Tkinter:
+\begin{lstlisting}[style=mlrx]
+python -m tkinter
+\end{lstlisting}
+  \item Ejecutar el modo GUI o CLI según se describe en las secciones siguientes.
+\end{enumerate}
+
+% =========================================================
+\section{Inicio rápido}
+\subsection{Abrir la interfaz gráfica}
+\begin{lstlisting}[style=mlrx]
+python MLRX_source.py
+\end{lstlisting}
+La aplicación inicia la clase principal y precarga las librerías pesadas en un hilo de fondo para mejorar la respuesta inicial.
+
+\subsection{Ejecutar el modo CLI}
+\begin{lstlisting}[style=mlrx]
+python MLRX_source.py --version
+python MLRX_source.py ruta/al/archivo.conf
+\end{lstlisting}
+El primer comando imprime la versión. El segundo carga un archivo de configuración válido y ejecuta todo el flujo en consola.
+
+% =========================================================
+\section{Recorrido de la interfaz (GUI)}
+MLR-X organiza sus funciones en pestañas dentro de una ventana principal (1000$\times$720 px). La barra superior muestra el estado y cada pestaña comparte el mismo contexto de análisis.
+
+\subsection{\textbf{Setup}}
+\paragraph{Dataset}
+\begin{enumerate}[label=\arabic*.]
+  \item Seleccionar el CSV (o usar \emph{Browse}).
+  \item Definir delimitador (\verb|;| por defecto), variable dependiente y columnas no predictoras.
+  \item Excluir observaciones por ID o rango (ej.: \texttt{3,9,4-8}).
+  \item Activar \emph{Excluir predictores casi constantes} y fijar el umbral porcentual.
+  \item Acciones: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. El estado se muestra en la esquina superior derecha del recuadro.
+\end{enumerate}
+
+\paragraph{Data splitting}
+\begin{itemize}
+  \item \textbf{None}: usar todo el dataset.
+  \item \textbf{Random}: especificar \emph{Test size (\%)}.
+  \item \textbf{Manual}: listas o rangos para train/test sin solapamiento.
+  \item \textbf{External}: archivo holdout con el mismo target y columnas.
+\end{itemize}
+
+\paragraph{Settings}
+\begin{enumerate}[label=\arabic*.]
+  \item Método de búsqueda: \textbf{EPR-S} (Expand–Perturb–Reduce–Swap) o \textbf{All Subsets}; ayuda contextual (icono \emph{ℹ}).
+  \item Parámetros clave: \emph{Max predictors}, \emph{Seeds}, \emph{Seed size}, niveles de significancia, \emph{export limit}, trabajos en paralelo (\texttt{n\_jobs}).
+  \item Métrica objetivo (R$^2$, adj-R$^2$ o Q$^2$), tipo de covarianza (\texttt{nonrobust}, \texttt{HC0--HC3}), recorte de predicciones y botones de recomendación.
+  \item Validación interactiva de campos numéricos, rutas y umbrales de clipping.
+\end{enumerate}
+
+\subsection{Pestaña \textbf{Models}}
+Agrupa tres tablas sincronizadas y una vista de diagnósticos por observación. Al seleccionar un modelo se habilitan \textbf{Validation}, \textbf{Diagnostics}, \textbf{Visualization} y \textbf{Summary}.
+\begin{itemize}
+  \item \textbf{Top models (train)}: ID, lista de predictores, R$^2$/adj-R$^2$, RMSE, MAE, $s$, VIF máximo y promedio.
+  \item \textbf{Internal validation}: Q$^2$/RMSE/MAE/$s$ para LOO y k-fold.
+  \item \textbf{External validation}: Q$^2_{\mathrm{F1,F2,F3}}$, RMSE y MAE externos.
+  \item \textbf{Observation diagnostics}: valores observados/predichos (estándar y LOO), residuales, z, hat, residuales estandarizados y Cook.
+  \item Controles: \emph{Sorted by}, \emph{Max rows} (hasta 5000) y actualización sincronizada entre pestañas.
+\end{itemize}
+
+\subsection{Pestaña \textbf{Validation}}
+\begin{itemize}
+  \item Selección de modelos: \emph{Top}, \emph{Multiple} (rango \texttt{1-5,7,9}) o \emph{All}.
+  \item \textbf{LOO y k-fold}: validación interna con controles de \emph{Folds} y \emph{Repeats}; reglas de plausibilidad (folds $\ge 2$, repeats $\ge 1$, folds $\le n$).
+  \item \textbf{Validación externa}: selección de archivo y delimitador; exige misma columna objetivo que el set de entrenamiento.
+  \item Estados separados para cada proceso y resumen final en el log.
+\end{itemize}
+
+\subsection{Pestaña \textbf{Summary}}
+\begin{itemize}
+  \item Reestima OLS al cambiar de modelo y reporta el tipo de covarianza recomendado (HC3 por defecto ante heterocedasticidad o leverage alto).
+  \item Métricas: R$^2$/adj-R$^2$, RMSE, MAE, $s$, VIF, correlaciones, estadísticas avanzadas (F, log-likelihood, AIC/BIC, Omnibus/JB, skewness, kurtosis, Durbin–Watson, número de condición, coeficiente de concordancia de Lin).
+  \item \emph{Export Summary…} guarda el dossier completo en texto plano.
+\end{itemize}
+
+\subsection{Pestaña \textbf{Diagnostics}}
+\begin{itemize}
+  \item Filtro de dataset (Training/Testing/Both) con propagación del estado de holdout.
+  \item Columnas clave: observación, set, valores reales y predichos (estándar y LOO), residuales, z, hat, residuales estandarizados y distancias de Cook (estándar y LOO).
+  \item \emph{Export CSV} disponible cuando hay datos visibles; respeta el filtro aplicado.
+  \item Matriz de correlación (triángulo inferior) con opción de incluir la variable dependiente.
+\end{itemize}
+
+\subsection{Pestaña \textbf{Visualization}}
+\begin{itemize}
+  \item Gráficos disponibles: heatmaps (con o sin dependiente), Predicted vs Actual (estándar y LOO), residuales vs actual/predicciones, Scale-Location, QQ residual, distribución de residuales, Williams plot, Cook vs leverage, Hat-values, Predicted vs Hat.
+  \item Controles comunes: leyenda y posición, modo de etiquetado, línea identidad, color de $h^*$, ajuste lineal opcional, rejilla, estilos diferenciados para train/test, sincronización de rangos y exportación a PNG/TIFF/PDF/SVG.
+  \item Edición de etiquetas de ejes y tamaño de fuente directamente desde la interfaz.
+\end{itemize}
+
+\subsection{Pestaña \textbf{Desktop} (Variable Explorer)}
+\begin{itemize}
+  \item Carga de CSV y resultados previos (resultados habilitan funciones adicionales).
+  \item Alcance de variables: \emph{All variables} o \emph{Only variables of model} (ingresando ID).
+  \item Controles de apariencia: tamaño/color/estilo de marcadores, límites y pasos de ejes, relación de aspecto (1, 4:3, 16:9, 9:16).
+  \item Etiquetado interactivo (click izquierdo activa/arrastra, click derecho limpia), leyenda, cuadrícula, ajuste lineal y \emph{Save current plot}.
+\end{itemize}
+
+% =========================================================
+\section{Flujo de análisis y manejo de procesos}
+\subsection{Antes de iniciar}
+\begin{enumerate}
+  \item Cargar y previsualizar el dataset.
+  \item Revisar delimitador, variable objetivo, exclusiones y modo de división.
+  \item Confirmar la ruta de exportación (\texttt{models.csv} por defecto).
+\end{enumerate}
+
+\subsection{Ejecución}
+\begin{enumerate}
+  \item Asegurar que no haya otra corrida activa.
+  \item Pulsar \emph{Run analysis}; la aplicación valida rutas, límites y recarga el dataset.
+  \item El estado cambia a \emph{Running}, se limpia el resultado previo y se inicia el log en tiempo real.
+\end{enumerate}
+
+\subsection{Progreso y cancelación}
+\begin{itemize}
+  \item Barra de progreso inferior (\%) y \emph{Log} con modelos evaluados y eventos.
+  \item \emph{Cancel} cambia a \emph{Cancelling…} y detiene los trabajos con cierre ordenado.
+  \item Errores muestran un diálogo y fijan el estado en \emph{Error}.
+\end{itemize}
+
+\subsection{Resultados y metadatos}
+\begin{enumerate}
+  \item El CSV se escribe en la ruta confirmada (\texttt{models.csv} por defecto).
+  \item La primera línea contiene un bloque JSON entre \verb|#EPRS-S ... ;#| con metadatos de la corrida.
+  \item La última ruta de exportación se recuerda como predeterminada para futuras sesiones.
+\end{enumerate}
+
+% =========================================================
+\section{Algoritmos de búsqueda}
+\subsection{EPR-S (Expand–Perturb–Reduce–Swap)}
+\begin{enumerate}
+  \item Define una métrica objetivo y un set inicial con límite de predictores.
+  \item \textbf{Expand}: añade predictores que mejoran la métrica sin exceder el máximo.
+  \item \textbf{Perturb}: intercambios 1--1 para escapar de óptimos locales.
+  \item \textbf{Reduce}: elimina predictores cuando la calidad se mantiene o mejora.
+  \item \textbf{Limpieza por correlación}: si $|r|$ supera el umbral, conserva la variable más útil.
+  \item \textbf{Swap}: reintroducciones controladas si aportan mejora; converge cuando no hay ganancias.
+  \item Filtros de calidad: umbral de VIF y \emph{Minimum report R$^2$/Q$^2$}; mantiene modelos únicos ordenados.
+\end{enumerate}
+
+\subsection{All Subsets}
+Genera y evalúa todas las combinaciones hasta \emph{Max predictors}; recomendable para $\lesssim25$ predictores. Comparte filtros de VIF y umbrales con EPR-S.
+
+\subsection{Buenas prácticas del motor}
+\begin{itemize}
+  \item Semillas: al menos tantas como predictores; usar el botón \emph{Recommended}.
+  \item Tamaño de semilla: aproximadamente la mitad de \emph{Max predictors}.
+  \item Umbral VIF: mantener $<5$.
+  \item Umbral de correlación: entre 0 y 1; nivel de significancia sugerido 0.05.
+\end{itemize}
+
+% =========================================================
+\section{Formato de resultados y exportes}
+\subsection{CSV de modelos}
+\begin{itemize}
+  \item Incluye métricas de entrenamiento, validación interna (LOO/k-fold) y externa, además del conteo de predictores y VIF.
+  \item Metadatos en la primera línea (bloque JSON) con información de proceso, tiempo de CPU, número de modelos encontrados y explorados.
+  \item \emph{export\_limit} controla el máximo de filas exportadas.
+\end{itemize}
+
+\subsection{Resumen y reportes}
+\begin{itemize}
+  \item \emph{Export Summary…}: guarda el dossier textual del modelo seleccionado.
+  \item \emph{Export CSV} en diagnósticos: respeta filtros y dataset activo.
+  \item Gráficos: \emph{Save current plot} exporta a PNG/TIFF/PDF/SVG con DPI elevado automático (>=1000 si el actual es menor).
+\end{itemize}
+
+% =========================================================
+\section{Uso en línea de comandos (CLI)}
+\subsection{Estructura del archivo de configuración}
+Archivo de texto con bloques encabezados (\# Dataset, \# Method, \# Validation, \# Output, etc.) y pares clave-valor. Las opciones de lista permiten seleccionar por índice mediante la línea \texttt{selected option: <n>} dentro del bloque.
+
+\paragraph{Campos principales}
+\begin{longtable}{>{\bfseries}p{4.2cm}p{10.2cm}}
+Data path & Ruta al CSV de entrada.\\
+Delimiter & Separador (\verb|;| por defecto, \verb|,|, tabulador o texto literal).\\
+Dependent choice & Variable objetivo (\verb|last| o nombre de columna).\\
+Non variable spec & Columnas a excluir del espacio de predictores.\\
+Exclude constant & Activa eliminación de columnas casi constantes (\emph{constant\_threshold} en \%).\\
+Excluded observations & IDs o rangos a omitir.\\
+Max vars / n seeds / seed size & Parámetros del motor EPR-S.\\
+Cov type & \texttt{nonrobust}, \texttt{HC0}, \texttt{HC1}, \texttt{HC2}, \texttt{HC3}.\\
+Signif lvl & Nivel de significancia para filtros.\\
+Corr threshold / VIF threshold & Límites para detectar colinealidad.\\
+Report R2 threshold & Umbral mínimo para reportar modelos.\\
+Export limit & Máximo de modelos en el CSV.\\
+n jobs & Núcleos a usar (normalizado a mínimo 1).\\
+Iterations mode & \texttt{auto}, \texttt{manual} (requiere \emph{max\_iterations\_per\_seed}) o \texttt{converge}.\\
+Clip predictions & Activar recorte con \emph{clip\_low}/\emph{clip\_high}.\\
+Split mode & \texttt{none}, \texttt{random} (\% test), \texttt{manual} (IDs train/test) o \texttt{external} (ruta y delimitador).\\
+Output path & Ruta del CSV de resultados.\\
+Target metric & Métrica objetivo (R$^2$ y variantes disponibles).\\
+Method & \texttt{eprs} o \texttt{all\_subsets}.\\
+\end{longtable}
+
+\paragraph{Ejemplo mínimo}
+\begin{lstlisting}[style=mlrx]
+# Dataset
+data_path: data.csv
+delimiter: ;
+dependent_choice: last
+non_variable_spec: ID
+exclude_constant: true
+constant_threshold: 90
+
+# Method
+method: eprs
+max_vars: 10
+n_seeds: 20
+seed_size: 4
+cov_type: HC3
+signif_lvl: 0.05
+corr_threshold: 0.90
+vif_threshold: 4.0
+report_r2_threshold: 0.80
+iterations_mode: auto
+export_limit: 500
+n_jobs: 4
+
+# Validation
+split_mode: random
+random_test_size_percent: 20
+
+# Output
+output_path: results/models.csv
+target_metric: R2
+clip_enabled: false
+\end{lstlisting}
+
+\subsection{Ejecución y progreso}
+Tras cargar el archivo, el CLI imprime información básica del dataset, opciones seleccionadas y valida rangos numéricos. Durante la búsqueda reporta el avance por etapas (semillas y cálculo de VIF) y detalla el número de modelos encontrados y explorados. Si \texttt{n\_jobs} supera el máximo permitido, se normaliza e informa por consola.
+
+\subsection{Salida}
+Los modelos se exportan al CSV especificado con nombres de variables normalizados, métricas internas/externas y metadatos de CPU. Los mensajes de error incluyen la causa y finalizan con código de salida 1.
+
+% =========================================================
+\section{Buenas prácticas operativas}
+\begin{itemize}
+  \item Revisar parámetros antes de cada corrida y guardar configuraciones (\texttt{.conf}) para reproducibilidad en batch/CLI.
+  \item Ajustar \texttt{n\_jobs} al hardware disponible para equilibrar tiempo y recursos.
+  \item Usar \texttt{iterations\_mode = converge} para permitir que EPR-S controle las iteraciones por convergencia.
+  \item Revisar colinealidad con umbrales de correlación y VIF; confirmar robustez en \textbf{Validation} y \textbf{Diagnostics} antes de decisiones.
+  \item Mantener un CSV limpio y documentar exclusiones; para holdout externo, conservar encabezados y orden idénticos.
+\end{itemize}
+
+% =========================================================
+\section{Solución de problemas y FAQ}
+\begin{itemize}
+  \item \textbf{La GUI no abre}: comprobar \verb|python -m tkinter| y la disponibilidad de Tk/Tcl.
+  \item \textbf{El CSV no carga}: verificar ruta, permisos y delimitador; usar \emph{Preview data}.
+  \item \textbf{Sin modelos exportados}: revisar \emph{Minimum report R$^2$/Q$^2$} y \emph{VIF threshold}.
+  \item \textbf{Validación externa falla}: la columna objetivo debe coincidir y el CSV debe contener los mismos predictores.
+  \item \textbf{Gráfico vacío o sin etiquetas}: seleccionar un modelo/dataset válido o cargar un archivo de resultados.
+  \item \textbf{Uso de CPU inesperado}: confirmar \texttt{n\_jobs}; el sistema lo corrige al mínimo 1 y avisa en consola si se ajusta.
+\end{itemize}
+
+% =========================================================
+\section{Créditos, licencia y citación}
+\begin{itemize}
+  \item Software distribuido bajo AGPL-3.0. Ver archivo \texttt{LICENSE.txt} para el texto completo.
+  \item Autor y copyright: Jackson J. Alcázar (2025). 
+  \item Texto de citación sugerido: \\ \emph{Alcázar, Jackson J. ``MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets''}. \texttt{CITATION\_TEXT} y entrada BibTeX \texttt{CITATION\_BIB} incluidos en el código fuente.
+  \item Contacto y mejoras: abrir issues en el repositorio oficial; contribuciones bienvenidas.
+\end{itemize}
+
+% =========================================================
+\section{Historial de versión 1.0}
+\begin{itemize}
+  \item Lanzamiento inicial con soporte completo GUI y CLI.
+  \item Inclusión de builds Linux y Windows (GUI y GUI+CLI); anuncio de build macOS.
+  \item Carga diferida de dependencias pesadas y ejecución paralela automática.
+  \item Validaciones internas (LOO/k-fold) y externas; exportación de resúmenes y gráficos en alta resolución.
+\end{itemize}
+
+\end{document}
