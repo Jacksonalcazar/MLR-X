@@ -64,7 +64,7 @@
   \item \textbf{Audience}: users who need to fit, validate, and diagnose multiple linear regression models on small or large datasets.
   \item \textbf{Official channels}:\\
   \textbf{Repository}: \url{https://github.com/Jacksonalcazar/MLR-X}\\
-  \textbf{Homepage}: \url{jackson.alcazar.github.io/MLR-X}
+  \textbf{Homepage}: \url{jacksonalcazar.github.io/MLR-X}
 \end{itemize}
 
 \subsection{Distributions and compatibility}
@@ -76,24 +76,13 @@
 
 % =========================================================
 \section{Requirements and installation}
-The distributed builds are self-contained. Choose the appropriate build and follow these steps:
+The distributed builds are self-contained and do not require traditional installation. Place each executable in your preferred folder. Optionally, add that folder to your system \texttt{PATH} so you can launch \verb|MLR-X| from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate build and follow these steps:
 
 \subsection{Installing from binaries}
 \begin{itemize}
-  \item \textbf{Linux}: download the binary, move it to your working folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}).
-  \item \textbf{Windows GUI}: run the installer and launch the generated shortcut for the graphical interface.
-  \item \textbf{Windows GUI+CLI}: run the installer; it includes the GUI shortcut and the CLI executable in the installation path.
-  \item \textbf{macOS GUI}: open the signed package and drag the app to \texttt{/Applications}.
-\end{itemize}
-
-% =========================================================
-\section{Quick start}
-\subsection{Launch the graphical interface}
-\begin{itemize}
-  \item \textbf{Windows GUI / macOS GUI}: run the \emph{MLR-X} application or shortcut. No extra parameters are required.
-  \item \textbf{Linux}: from a terminal, move to the binary location and run \verb|./MLR-X|. To create a desktop launcher:
+  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. To create a desktop launcher:
   \begin{enumerate}[label=\arabic*.]
-    \item Build the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
+    \item Build the Linux executable, then copy the binary and the icon to a stable location, for example:
 \begin{verbatim}
 sudo mkdir -p /opt/MLRX
 sudo cp MLRX /opt/MLRX/
@@ -114,6 +103,17 @@ update-desktop-database ~/.local/share/applications
 \end{verbatim}
   \end{enumerate}
   The registered launcher will appear in your desktop application menu and can be pinned to the dock or panel depending on your environment.
+  \item \textbf{Windows GUI}: run the installer and launch the generated shortcut for the graphical interface.
+  \item \textbf{Windows GUI+CLI}: run the installer; it includes the GUI shortcut and the CLI executable in the installation path.
+  \item \textbf{macOS GUI}: open the signed package and drag the app to \texttt{/Applications}.
+\end{itemize}
+
+% =========================================================
+\section{Quick start}
+\subsection{Launch the graphical interface}
+\begin{itemize}
+  \item \textbf{Windows GUI / macOS GUI}: run the \emph{MLR-X} application or shortcut. No extra parameters are required.
+  \item \textbf{Linux}: from a terminal, move to the binary location and run \verb|./MLR-X| (or simply \verb|MLR-X| if the folder is on your \texttt{PATH}).
 \end{itemize}
 
 \subsection{Run the CLI mode}
