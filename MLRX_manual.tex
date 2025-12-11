@@ -69,9 +69,9 @@
 
 \subsection{Distributions and compatibility}
 \begin{itemize}
-  \item \textbf{Available builds}: self-contained binaries for Linux, macOS (GUI), Windows GUI, and Windows GUI+CLI.
+  \item \textbf{Available builds}: self-contained binaries for Linux, macOS (GUI and GUI+CLI), Windows GUI, and Windows GUI+CLI.
   \item \textbf{System requirements}: 64-bit Windows, Linux, or macOS. No Python installation or scientific libraries are required; everything ships within the build.
-  \item \textbf{Console version}: available in the CLI-enabled builds (Linux and Windows GUI+CLI) to run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
+  \item \textbf{Console version}: available in the CLI-enabled builds (Linux, macOS GUI+CLI, and Windows GUI+CLI) to run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
 \end{itemize}
 
 % =========================================================
@@ -99,6 +99,7 @@ The distributed builds are self-contained downloads and do not require installer
   \item \textbf{Windows GUI}: download the GUI build, place \texttt{MLR-X.exe} in a convenient folder, and run it directly.
   \item \textbf{Windows GUI+CLI}: same as Windows GUI, with the Run CLI option enabled.
   \item \textbf{macOS GUI}: download the app bundle and run it from your preferred location (e.g., move it to \texttt{/Applications} if desired).
+  \item \textbf{macOS GUI+CLI}: same as macOS GUI, with the Run CLI option enabled.
 \end{itemize}
 
 \section{Interface tour (GUI)}
@@ -260,11 +261,13 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 
 % =========================================================
 \section{Command-line (CLI) usage}
-Available in the Linux and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
+Available in the Linux, macOS GUI+CLI, and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
 
 \subsection{Invocation}
 \begin{lstlisting}[style=mlrx]
 # Linux
+./MLRX config.conf or ./MLRX path/to/config.conf
+# macOS GUI+CLI
 ./MLRX config.conf or ./MLRX path/to/config.conf
 # Windows GUI+CLI
 MLRX.exe config.conf or MLRX.exe path/to/config.conf
@@ -317,7 +320,7 @@ Report any persisting issues or bugs at \url{https://github.com/Jacksonalcazar/M
 \section{Version history 1.0}
 \begin{itemize}
   \item Initial release with full GUI and CLI support.
-  \item Inclusion of Linux and Windows builds (GUI and GUI+CLI); macOS build announcement.
+  \item Inclusion of Linux, macOS, and Windows builds (GUI and GUI+CLI).
   \item Deferred loading of heavy dependencies and automatic parallel execution.
   \item Internal (LOO/k-fold) and external validations; export of summaries and high-resolution plots.
 \end{itemize}
