@@ -137,7 +137,8 @@ MLR-X organizes its features into tabs within a main window.
 \paragraph{Settings}
 \begin{enumerate}[label=\arabic*.]
   \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is a new, original method implemented in this software (doi.org/xxxxx).
-  \item Key parameters (interface labels): \emph{Max predictors per model}, \emph{Number of seeds}, \emph{Seed size}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the number of best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation threshold and VIF threshold control multicollinearity pruning, and Minimum report R$^2$ filters low-performing candidates.
+  \item Key parameters: \emph{Max predictors per model}, \emph{Number of seeds}, \emph{Seed size}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the number of best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation threshold and VIF threshold control multicollinearity pruning, and Minimum report R$^2$ filters low-performing candidates.
+  \item Set iterations/seed: \textbf{Auto} (estimate and apply the maximum per seed automatically), \textbf{Manual} (requires \emph{Max iterations per seed}), or \textbf{Run until convergence} (may take a long time).
   \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance estimator (Non robust, HC0--HC3), \emph{Clip predictions to}, and recommendation buttons. Non robust keeps the standard OLS variance; HC0--HC3 provide heteroskedasticity-consistent covariance estimates (HC3 is the most conservative for high leverage).
 \end{enumerate}
 
