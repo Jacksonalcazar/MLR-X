@@ -135,8 +135,8 @@ MLR-X organizes its features into tabs within a main window.
 \paragraph{Settings}
 \begin{enumerate}[label=\arabic*.]
   \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}; contextual help (\emph{ℹ} icon).
-  \item Key parameters: \emph{Max predictors}, \emph{Seeds}, \emph{Seed size}, significance levels, \emph{export limit}, and parallel jobs (\texttt{n\_jobs}).
-  \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance type (\texttt{nonrobust}, \texttt{HC0--HC3}), prediction clipping, and recommendation buttons.
+  \item Key parameters: \emph{Max predictors}, \emph{Seeds}, \emph{Seed size}, significance levels, \emph{Export limit}, and \emph{Parallel jobs}.
+  \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance estimator (Nonrobust, HC0--HC3), prediction clipping, and recommendation buttons.
   \item Interactive validation for numeric fields, paths, and clipping thresholds.
 \end{enumerate}
 
@@ -251,7 +251,7 @@ Generates and evaluates all combinations up to \emph{Max predictors}; recommende
 \begin{itemize}
   \item Includes training metrics, internal validation (LOO/k-fold) and external validation, plus predictor counts and VIF.
   \item Metadata in the first line (JSON block) with process info, CPU time, and the number of models found and explored.
-  \item \emph{export\_limit} controls the maximum rows exported.
+  \item \emph{Export limit} controls the maximum rows exported.
 \end{itemize}
 
 \subsection{Summary and reports}
@@ -269,24 +269,24 @@ Text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, e
 \paragraph{Main fields}
 \begin{longtable}{>{\bfseries}p{4.2cm}p{10.2cm}}
 Data path & Path to the input CSV.\\
-Delimiter & Separator (\verb|;| by default, \verb|,|, tab, or literal text).\\
-Dependent choice & Target variable (\verb|last| or column name).\\
-Non variable spec & Columns to exclude from the predictor space.\\
-Exclude constant & Enables removal of nearly constant columns (\emph{constant\_threshold} in \%).\\
-Excluded observations & IDs or ranges to omit.\\
-Max vars / n seeds / seed size & EPR-S engine parameters.\\
-Cov type & \texttt{nonrobust}, \texttt{HC0}, \texttt{HC1}, \texttt{HC2}, \texttt{HC3}.\\
-Signif lvl & Significance level for filters.\\
-Corr threshold / VIF threshold & Limits to detect collinearity.\\
-Report R2 threshold & Minimum threshold to report models.\\
+CSV delimiter & Separator (\verb|;| by default, \verb|,|, tab, or literal text).\\
+Dependent variable & Target variable (\verb|last| or column name).\\
+Non-variable columns & Columns to exclude from the predictor space.\\
+Exclude nearly constant predictors & Enables removal of nearly constant columns (percentage threshold).\\
+Exclude observations (IDs) & IDs or ranges to omit.\\
+Max predictors / Seeds / Seed size & EPR-S engine parameters.\\
+Covariance estimator & Nonrobust, HC0, HC1, HC2, HC3.\\
+Significance level & Significance level for filters.\\
+Correlation threshold / VIF threshold & Limits to detect collinearity.\\
+Minimum report R$^2$/Q$^2$ & Minimum threshold to report models.\\
 Export limit & Maximum number of models in the CSV.\\
-n jobs & Cores to use (normalized to at least 1).\\
-Iterations mode & \texttt{auto}, \texttt{manual} (requires \emph{max\_iterations\_per\_seed}) or \texttt{converge}.\\
-Clip predictions & Enable clipping with \emph{clip\_low}/\emph{clip\_high}.\\
-Split mode & \texttt{none}, \texttt{random} (\% test), \texttt{manual} (train/test IDs) or \texttt{external} (path and delimiter).\\
+Parallel jobs & Cores to use (normalized to at least 1).\\
+Iterations mode & Auto, Manual (requires \emph{Max iterations per seed}) or Converge.\\
+Clip predictions & Enable clipping with \emph{Lower clip}/\emph{Upper clip}.\\
+Split mode & None, Random (\% test), Manual (train/test IDs) or External (path and delimiter).\\
 Output path & Result CSV path.\\
 Target metric & Objective metric (R$^2$ and available variants).\\
-Method & \texttt{eprs} or \texttt{all\_subsets}.\\
+Search method & EPR-S or All subsets.\\
 \end{longtable}
 
 \paragraph{Minimal example}
@@ -324,7 +324,7 @@ clip_enabled: false
 \end{lstlisting}
 
 \subsection{Execution and progress}
-After loading the file, the CLI prints dataset basics, selected options, and validates numeric ranges. During the search it reports stage progress (seeds and VIF computation) and details the number of models found and explored. If \texttt{n\_jobs} exceeds the allowed maximum, it is normalized and reported on the console.
+After loading the file, the CLI prints dataset basics, selected options, and validates numeric ranges. During the search it reports stage progress (seeds and VIF computation) and details the number of models found and explored. If the requested parallel jobs exceed the allowed maximum, they are normalized and reported on the console.
 
 \subsection{Output}
 Models are exported to the specified CSV with normalized variable names, internal/external metrics, and CPU metadata. Error messages include the cause and exit with code 1.
@@ -333,8 +333,8 @@ Models are exported to the specified CSV with normalized variable names, interna
 \section{Operational good practices}
 \begin{itemize}
   \item Review parameters before each run and save configuration files (\texttt{.conf}) for batch/CLI reproducibility.
-  \item Adjust \texttt{n\_jobs} to available hardware to balance time and resources.
-  \item Use \texttt{iterations\_mode = converge} to let EPR-S control iterations by convergence.
+  \item Adjust \emph{Parallel jobs} to available hardware to balance time and resources.
+  \item Use \emph{Iterations mode = Converge} to let EPR-S control iterations by convergence.
   \item Check collinearity with correlation and VIF thresholds; confirm robustness in \textbf{Validation} and \textbf{Diagnostics} before decisions.
   \item Keep the CSV clean and document exclusions; for external holdout, preserve identical headers and order.
 \end{itemize}
@@ -347,7 +347,7 @@ Models are exported to the specified CSV with normalized variable names, interna
   \item \textbf{No models exported}: review \emph{Minimum report R$^2$/Q$^2$} and \emph{VIF threshold}.
   \item \textbf{External validation fails}: the target column must match and the CSV must contain the same predictors.
   \item \textbf{Empty plot or missing labels}: select a valid model/dataset or load a results file.
-  \item \textbf{Unexpected CPU usage}: check \texttt{n\_jobs}; the system normalizes it to at least 1 and reports adjustments.
+  \item \textbf{Unexpected CPU usage}: check \emph{Parallel jobs}; the system normalizes the value to at least 1 and reports adjustments.
 \end{itemize}
 
 % =========================================================
