@@ -145,9 +145,9 @@ If you select \textbf{None} (full dataset), you can still perform external valid
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Displays three synchronized tables summarizing training, internal validation, and external validation results. The upper panel allows loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), selecting the sorting criterion, and adjusting the maximum number of displayed rows.
+Displays three synchronized tables summarizing training, internal validation, and external validation results. The upper panel allows loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), selecting the sorting criterion, and filtering models by predictors.
 \begin{itemize}
-  \item \textbf{Top models training}: shows each model together with its predictor set, number of variables, goodness-of-fit statistics (R$^2$, adjusted R$^2$, RMSE, MAE, and $s$), and multicollinearity indicators (maximum and average VIF).
+  \item \textbf{Top models training}: shows each model together with its predictor set, number of predictors (\textbf{N pred}), goodness-of-fit statistics (R$^2$, adjusted R$^2$, RMSE, MAE, and $s$), and multicollinearity indicators (maximum and average VIF).
   \item \textbf{Top models internal validation (CV)}: reports the corresponding LOO and k-fold performance metrics, including Q$^2$, RMSE, MAE, and $s$ for each procedure.
   \item \textbf{Top models external validation}: presents the external prediction results using Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (R$^2_{\mathrm{ext}}$), Q$^2_{\mathrm{F3}}$, and the external RMSE and MAE values.
 \end{itemize}
