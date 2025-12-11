@@ -283,7 +283,9 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 \section{Operational good practices}
 \begin{itemize}
   \item Validate inputs before running: preview the CSV to confirm delimiter, target, non-variable columns, and exclusions; apply the constant filter when near-constant predictors should be removed. If you plan an external holdout, keep identical headers, order, and target column across files.
+  \item Choose the search method deliberately: use EPR-S when you need faster exploration guided by seeds, or All subsets when you want exhaustive coverage but can tolerate longer runtimes.
   \item Let the app prefill EPR-S values with the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5000) to manage how many models are kept and written.
+  \item Tune statistical thresholds before running: set \emph{Significance level} to control predictor inclusion, and set the \emph{Correlation threshold} and \emph{Variance Inflation Factor (VIF) threshold} to prune multicollinearity; revisit these if too many or too few models survive.
   \item Set \emph{Parallel jobs} in line with your CPU; the app normalizes this value, but requesting fewer jobs avoids contention on busy machines.
   \item Always run internal (LOO/k-fold) and, when available, external validation, then inspect \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to confirm stability. Use the recommended covariance toggle in Summary when inference is needed.
   \item Use \emph{Clip predictions to} only when the response has known bounds, keeping the limits consistent with training data units.
