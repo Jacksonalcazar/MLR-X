@@ -173,9 +173,11 @@ Provides per-observation diagnostics for the selected model and the correspondin
 
 \subsection{\textbf{Visualization} tab}
 \begin{itemize}
-  \item Available plots: heatmaps (with or without dependent variable), Predicted vs Actual (standard and LOO), residuals vs actual/predictions, Scale--Location, QQ residual, residual distribution, Williams plot, Cook vs leverage, Hat-values, and Predicted vs Hat.
-  \item Common controls: legend toggle and position, labeling mode, identity line, $h^*$ color, optional linear fit, grid, distinct styles for train/test, synchronized ranges, and export to PNG/TIFF/PDF/SVG.
-  \item Axis labels and font size can be edited directly from the interface.
+  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization analysis runs per model and can insert its charts into the plot list once computed.
+  \item Chart list: correlation heatmaps (with or without the dependent variable), Predicted vs Actual (standard and by LOO), residuals vs actual/predictions (standard and by LOO), Scale--Location (standard and by LOO), QQ residuals (standard and by LOO), residual distribution (standard and by LOO), Williams plot (standard and by LOO), Cook's distance vs leverage (standard and by LOO), leverage plot, and Predicted vs Leverage.
+  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or an auto-detected extra column), identity line (for predicted vs actual and QQ residual plots), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axis ranges.
+  \item Marker customization: separate color and marker-style pickers for training and testing points, plus marker size control; heatmaps disable incompatible controls automatically.
+  \item Axes and export: manual limits for X/Y, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
 \end{itemize}
 
 \subsection{\textbf{Summary} tab}
