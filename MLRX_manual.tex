@@ -102,12 +102,11 @@ The distributed builds are self-contained downloads and do not require installer
 \end{itemize}
 
 % =========================================================
-\section{Command-line execution}
-Available only in the builds that include the CLI (Linux and Windows GUI+CLI). Examples:
+\section{Command-line (CLI) execution}
+Available only in the builds that include the CLI (Linux and Windows GUI+CLI). Run the pipeline headlessly with a configuration file:
 \begin{lstlisting}[style=mlrx]
-./MLR-X --version          # Linux
-MLR-X.exe --version        # Windows GUI+CLI
-./MLR-X path/to/config.conf
+./MLRX  config.conf or ./MLRX  path/to/config.conf      # Linux
+MLRX.exe config.conf or MLRX.exe  path/to/config.conf    # Windows GUI+CLI
 \end{lstlisting}
 Executing with a configuration file loads the defined parameters and runs the full pipeline in the console.
 
