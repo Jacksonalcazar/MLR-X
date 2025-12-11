@@ -127,12 +127,13 @@ MLR-X organizes its features into tabs within a main window.
 \end{enumerate}
 
 \paragraph{Data splitting}
+Choose how to partition the dataset for training and testing.
 \begin{itemize}
   \item \textbf{None}: use the full dataset.
   \item \textbf{Random}: specify \emph{Test size (\%)}.
   \item \textbf{Manual}: lists or ranges for train/test without overlap.
-  \item \textbf{External}: holdout file with the same target and columns.
 \end{itemize}
+If you select \textbf{None} (full dataset), you can still perform external validation later in the \textbf{Validation} tab by loading an external file.
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
