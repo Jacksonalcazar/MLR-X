@@ -145,14 +145,13 @@ If you select \textbf{None} (full dataset), you can still perform external valid
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Three synchronized tables plus an observation diagnostic view. Selecting a model enables the \textbf{Validation}, \textbf{Diagnostics}, \textbf{Visualization}, and \textbf{Summary} tabs.
+Displays three synchronized tables summarizing training, internal validation, and external validation results. The upper panel allows loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), selecting the sorting criterion, and adjusting the maximum number of displayed rows.
 \begin{itemize}
-  \item \textbf{Top models (train)}: ID, predictor list, R$^2$/adj-R$^2$, RMSE, MAE, $s$, maximum and average VIF.
-  \item \textbf{Internal validation}: Q$^2$/RMSE/MAE/$s$ for LOO and k-fold.
-  \item \textbf{External validation}: Q$^2_{\mathrm{F1,F2,F3}}$, external RMSE, and MAE.
-  \item \textbf{Observation diagnostics}: observed/predicted values (standard and LOO), residuals, $z$, hat, standardized residuals, and Cook's distance.
-  \item Controls: \emph{Sorted by}, \emph{Max rows} (up to 5000), and synchronized refresh with other tabs.
+  \item \textbf{Top models training}: shows each model together with its predictor set, number of variables, goodness-of-fit statistics (R$^2$, adjusted R$^2$, RMSE, MAE, and $s$), and multicollinearity indicators (maximum and average VIF).
+  \item \textbf{Top models internal validation (CV)}: reports the corresponding LOO and k-fold performance metrics, including Q$^2$, RMSE, MAE, and $s$ for each procedure.
+  \item \textbf{Top models external validation}: presents the external prediction results using Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (R$^2_{\mathrm{ext}}$), Q$^2_{\mathrm{F3}}$, and the external RMSE and MAE values.
 \end{itemize}
+All three tables refresh automatically and remain synchronized with the \textbf{Validation}, \textbf{Diagnostics}, \textbf{Visualization}, and \textbf{Summary} tabs, which become available as soon as a model set is generated when the run analysis is completed or when model results are loaded.
 
 \subsection{\textbf{Validation} tab}
 \begin{itemize}
