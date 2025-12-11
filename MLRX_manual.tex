@@ -191,10 +191,10 @@ Provides per-observation diagnostics for the selected model and the correspondin
 
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
 \begin{itemize}
-  \item Load CSV data or previous results (results enable extra functions).
-  \item Variable scope: \emph{All variables} or \emph{Only variables of model} (enter an ID).
-  \item Appearance controls: marker size/color/style, axis limits and steps, aspect ratio (1, 4:3, 16:9, 9:16).
-  \item Interactive labeling (left-click to activate/drag, right-click to clear), legend, grid, linear fit, and \emph{Save current plot}.
+  \item Dataset and results inputs: browse/load the CSV and an optional results file (unlocks model-based options) with a status line indicating readiness.
+  \item Variable scope and axes: pick \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches the plot mode, with bin controls for a fixed number of bins or custom breakpoints.
+  \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model context is active), aspect ratio presets (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog to set axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
+  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution by default). \emph{Create filtered dataset} builds a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range, warning about any missing models in the requested range.
 \end{itemize}
 
 \subsection{\textbf{Help} tab}
