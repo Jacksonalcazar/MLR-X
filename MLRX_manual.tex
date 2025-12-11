@@ -154,11 +154,11 @@ Displays three synchronized tables summarizing training, internal validation, an
 All three tables refresh automatically and remain synchronized with the \textbf{Validation}, \textbf{Diagnostics}, \textbf{Visualization}, and \textbf{Summary} tabs, which become available as soon as a model set is generated when the run analysis is completed or when model results are loaded.
 
 \subsection{\textbf{Validation} tab}
+Use this tab to configure cross-validation and external validation for the selected models.
 \begin{itemize}
   \item Model selection: \emph{Top}, \emph{Multiple} (range like \texttt{1-5,7,9}), or \emph{All}.
-  \item \textbf{LOO and k-fold}: internal validation with \emph{Folds} and \emph{Repeats}; plausibility rules (folds $\ge 2$, repeats $\ge 1$, folds $\le n$).
+  \item \textbf{LOO and k-fold}: internal validation with \emph{Folds} and \emph{Repeats}.
   \item \textbf{External validation}: select file and delimiter; requires the same target column as the training set.
-  \item Independent status indicators for each process and a final summary in the log.
 \end{itemize}
 
 \subsection{\textbf{Diagnostics} tab}
