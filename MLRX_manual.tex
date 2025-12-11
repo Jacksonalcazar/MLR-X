@@ -208,30 +208,28 @@ Provides per-observation diagnostics for the selected model and the correspondin
 \section{Analysis flow and process handling}
 \subsection{Before starting}
 \begin{enumerate}
-  \item Load and preview the dataset.
-  \item Review delimiter, target variable, exclusions, and split mode.
-  \item Confirm the export path (\texttt{models.csv} by default).
+  \item Load and preview the dataset, confirming delimiter, target, exclusions, and split mode.
+  \item Check that no other run is in progress, then choose where to save results when prompted (defaults to \texttt{models.csv}; a custom path is allowed).
 \end{enumerate}
 
-\subsection{Execution}
+\subsection{Starting a run}
 \begin{enumerate}
-  \item Ensure no other run is active.
-  \item Click \emph{Run analysis}; the app validates paths, limits, and reloads the dataset.
-  \item Status switches to \emph{Running}, previous results are cleared, and the real-time log starts.
+  \item Click \emph{Run analysis}. The app validates the configuration, reloads the dataset (including the split), and prepares the selected output file.
+  \item The status switches to \emph{Running}, the \emph{Run analysis} button is disabled, \emph{Cancel} is enabled, and previous results, caches, and downstream tabs (Validation, Summary, Diagnostics, Visualization, Desktop) are reset.
+  \item A run header plus ``Starting analysis...'' is appended to the log; the progress bar and step counter are reset for the search and post-processing stages.
 \end{enumerate}
 
 \subsection{Progress and cancellation}
 \begin{itemize}
-  \item Bottom progress bar (\%) and \emph{Log} show evaluated models and events.
-  \item \emph{Cancel} switches to \emph{Cancelling...} and stops jobs with orderly shutdown.
-  \item Errors raise a dialog and set status to \emph{Error}.
+  \item The progress bar tracks completion across stages, and the \emph{Log} shows model counts, filters, CPU times, and other events in real time.
+  \item \emph{Cancel} changes the status to \emph{Cancelling...}, disables the \emph{Cancel} button, signals all workers to stop, and records the request in the log. Errors raise a dialog, set status to \emph{Error}, and keep the run controls enabled for a new attempt.
 \end{itemize}
 
-\subsection{Results and metadata}
+\subsection{Completion and outputs}
 \begin{enumerate}
-  \item The CSV is written to the confirmed path (\texttt{models.csv} by default).
-  \item The first line contains a JSON block between \verb|#EPRS-S ... ;#| with run metadata.
-  \item The last export path is remembered as the default for future sessions.
+  \item When finished, the status becomes \emph{Completed}; \emph{Run analysis} re-enables and \emph{Cancel} disables. Validation, Diagnostics, Visualization, and Summary tabs are unlocked with the new results, and any external holdout is refreshed if available.
+  \item Results load automatically into the tables, summary pane, and downstream tabs, and the CSV is written to the confirmed path (\texttt{models.csv} by default). The header line embeds run metadata as JSON between \verb|#EPRS-S ... ;#|, and the most recent export path is remembered for the next session.
+  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and notifies you with an information dialog.
 \end{enumerate}
 
 % =========================================================
