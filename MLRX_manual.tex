@@ -272,30 +272,45 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 
 % =========================================================
 \section{Command-line usage (CLI)}
+Available in the Linux and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
+
+\subsection{Invocation}
+\begin{lstlisting}[style=mlrx]
+# Linux
+./MLRX path/to/config.conf
+# Windows GUI+CLI
+MLRX.exe path/to/config.conf
+\end{lstlisting}
+If additional arguments are supplied, the program shows the expected syntax and exits.
+
 \subsection{Configuration file structure}
-Text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List options allow index selection via \texttt{selected option: <n>} inside the block.
+Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options let you select by index using \texttt{selected option: <n>} inside the block (for example, to pick a delimiter or target metric).
 
 \paragraph{Main fields}
 \begin{longtable}{>{\bfseries}p{4.2cm}p{10.2cm}}
-Data path & Path to the input CSV.\\
-CSV delimiter & Separator (\verb|;| by default, \verb|,|, tab, or literal text).\\
-Dependent variable & Target variable (\verb|last| or column name).\\
-Non-variable columns & Columns to exclude from the predictor space.\\
-Exclude nearly constant predictors & Enables removal of nearly constant columns (percentage threshold).\\
-Exclude observations (IDs) & IDs or ranges to omit.\\
-Max Predictors / Seeds / Seed Size & EPR-S engine parameters.\\
-Covariance estimator & Non robust, HC0, HC1, HC2, HC3.\\
-Significance level & Significance level for filters.\\
-Correlation threshold / VIF threshold & Limits to detect collinearity.\\
-Minimum report R$^2$ & Training R$^2$ threshold required for a model to be recorded.\\
-Export limit & Maximum number of top models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000).\\
-Parallel jobs & Cores to use (normalized to at least 1).\\
-Iterations mode & Auto, Manual (requires \emph{Max iterations per seed}) or Converge.\\
-Clip predictions & Enable clipping with \emph{Lower clip}/\emph{Upper clip}.\\
-Split mode & None, Random (\% test), Manual (train/test IDs) or External (path and delimiter).\\
-Output path & Result CSV path.\\
-Target metric & Objective metric (R$^2$ and available variants).\\
-Search method & EPR-S or All subsets.\\
+data\_path & Input CSV path.\\
+delimiter & Separator (\verb|;| by default, or \verb|,|, tab, or literal text).\\
+dependent\_choice & Target variable (\verb|last| by default; accepts column names or positions).\\
+non\_variable\_spec & Columns to exclude from the predictor space.\\
+exclude\_constant, constant\_threshold & Enable and set the nearly constant predictor filter (percentage).\\
+excluded\_observations & Observation IDs or ranges to omit.\\
+method & Search method: \texttt{eprs} or \texttt{all\_subsets}.\\
+max\_vars & Max predictors per model.\\
+n\_seeds, seed\_size & EPR-S seed count and size.\\
+iterations\_mode, max\_iterations\_per\_seed & Iterations per seed (\texttt{auto}, \texttt{manual}, or \texttt{converge}); manual requires the max-iterations value.\\
+target\_metric & Objective metric (R2, R2 adj, or Q2 (LOO)).\\
+cov\_type & Covariance type: Non-robust, HC0, HC1, HC2, or HC3.\\
+signif\_lvl & Significance level.\\
+corr\_threshold, vif\_threshold & Correlation threshold and VIF threshold for multicollinearity pruning.\\
+report\_r2\_threshold & Minimum report R$^2$ (training R$^2$ gate for recording models).\\
+clip\_enabled, clip\_low, clip\_high & Toggle and bounds for clipping predictions.\\
+split\_mode & \texttt{none} (full dataset), \texttt{random} (test \%), \texttt{manual} (train/test ID lists), or \texttt{external} (validation file).\\
+external\_path, external\_delimiter & External validation file path and delimiter (when \texttt{split\_mode = external}).\\
+manual\_train\_ids, manual\_test\_ids & ID lists/ranges for manual splits.\\
+random\_test\_size\_percent & Test percentage for random splits.\\
+export\_limit & Max rows written to the model CSV and linked tables (default 5000).\\
+n\_jobs & Parallel jobs (normalized to the allowed maximum).\\
+output\_path & Destination CSV for models.\\
 \end{longtable}
 
 \paragraph{Minimal example}
@@ -313,12 +328,13 @@ method: eprs
 max_vars: 10
 n_seeds: 20
 seed_size: 4
-cov_type: HC3
+iterations_mode: auto
 signif_lvl: 0.05
 corr_threshold: 0.90
 vif_threshold: 4.0
 report_r2_threshold: 0.80
-iterations_mode: auto
+target_metric: R2
+cov_type: HC3
 export_limit: 500
 n_jobs: 4
 
@@ -328,15 +344,14 @@ random_test_size_percent: 20
 
 # Output
 output_path: results/models.csv
-target_metric: R2
 clip_enabled: false
 \end{lstlisting}
 
 \subsection{Execution and progress}
-After loading the file, the CLI prints dataset basics, selected options, and validates numeric ranges. During the search it reports stage progress (seeds and VIF computation) and details the number of models found and explored. If the requested parallel jobs exceed the allowed maximum, they are normalized and reported on the console.
+The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
 
 \subsection{Output}
-Models are exported to the specified CSV with normalized variable names, internal/external metrics, and CPU metadata. Error messages include the cause and exit with code 1.
+Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Minimum report R$^2$ filter, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
 
 % =========================================================
 \section{Operational good practices}
