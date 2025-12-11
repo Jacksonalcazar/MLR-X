@@ -105,8 +105,10 @@ The distributed builds are self-contained downloads and do not require installer
 \section{Command-line (CLI) execution}
 Available only in the builds that include the CLI (Linux and Windows GUI+CLI). Run the pipeline headlessly with a configuration file:
 \begin{lstlisting}[style=mlrx]
-./MLRX  config.conf or ./MLRX  path/to/config.conf      # Linux
-MLRX.exe config.conf or MLRX.exe  path/to/config.conf    # Windows GUI+CLI
+# Linux
+./MLRX config.conf or ./MLRX path/to/config.conf
+# Windows GUI+CLI
+MLRX.exe config.conf or MLRX.exe path/to/config.conf
 \end{lstlisting}
 Executing with a configuration file loads the defined parameters and runs the full pipeline in the console.
 
@@ -134,10 +136,9 @@ MLR-X organizes its features into tabs within a main window.
 
 \paragraph{Settings}
 \begin{enumerate}[label=\arabic*.]
-  \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}; contextual help (\emph{ℹ} icon).
-  \item Key parameters: \emph{Max predictors}, \emph{Seeds}, \emph{Seed size}, significance levels, \emph{Export limit}, and \emph{Parallel jobs}.
-  \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance estimator (Nonrobust, HC0--HC3), prediction clipping, and recommendation buttons.
-  \item Interactive validation for numeric fields, paths, and clipping thresholds.
+  \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is a new, original method implemented in this software (doi.org/xxxxx).
+  \item Key parameters: \emph{Max Predictors}, \emph{Seeds}, \emph{Seed Size}, \emph{Significance Levels}, \emph{Export Limit}, and \emph{Parallel Jobs}. \emph{Export Limit} caps the number of top models written to CSV, diagnostics tables, visualizations, and summaries (default 5000).
+  \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance estimator (Non robust, HC0--HC3), prediction clipping, and recommendation buttons. Non robust keeps the standard OLS variance; HC0--HC3 provide heteroskedasticity-consistent covariance estimates (HC3 is the most conservative for high leverage).
 \end{enumerate}
 
 \subsection{\textbf{Models} tab}
@@ -274,12 +275,12 @@ Dependent variable & Target variable (\verb|last| or column name).\\
 Non-variable columns & Columns to exclude from the predictor space.\\
 Exclude nearly constant predictors & Enables removal of nearly constant columns (percentage threshold).\\
 Exclude observations (IDs) & IDs or ranges to omit.\\
-Max predictors / Seeds / Seed size & EPR-S engine parameters.\\
-Covariance estimator & Nonrobust, HC0, HC1, HC2, HC3.\\
+Max Predictors / Seeds / Seed Size & EPR-S engine parameters.\\
+Covariance estimator & Non robust, HC0, HC1, HC2, HC3.\\
 Significance level & Significance level for filters.\\
 Correlation threshold / VIF threshold & Limits to detect collinearity.\\
 Minimum report R$^2$/Q$^2$ & Minimum threshold to report models.\\
-Export limit & Maximum number of models in the CSV.\\
+Export limit & Maximum number of top models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000).\\
 Parallel jobs & Cores to use (normalized to at least 1).\\
 Iterations mode & Auto, Manual (requires \emph{Max iterations per seed}) or Converge.\\
 Clip predictions & Enable clipping with \emph{Lower clip}/\emph{Upper clip}.\\
