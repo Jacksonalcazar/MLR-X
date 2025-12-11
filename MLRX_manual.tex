@@ -271,7 +271,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 \end{itemize}
 
 % =========================================================
-\section{Command-line usage (CLI)}
+\section{Command-line (CLI) usage}
 Available in the Linux and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
 
 \subsection{Invocation}
@@ -285,68 +285,6 @@ If additional arguments are supplied, the program shows the expected syntax and 
 
 \subsection{Configuration file structure}
 Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options let you select by index using \texttt{selected option: <n>} inside the block (for example, to pick a delimiter or target metric).
-
-\paragraph{Main fields}
-\begin{longtable}{>{\bfseries}p{4.2cm}p{10.2cm}}
-data\_path & Input CSV path.\\
-delimiter & Separator (\verb|;| by default, or \verb|,|, tab, or literal text).\\
-dependent\_choice & Target variable (\verb|last| by default; accepts column names or positions).\\
-non\_variable\_spec & Columns to exclude from the predictor space.\\
-exclude\_constant, constant\_threshold & Enable and set the nearly constant predictor filter (percentage).\\
-excluded\_observations & Observation IDs or ranges to omit.\\
-method & Search method: \texttt{eprs} or \texttt{all\_subsets}.\\
-max\_vars & Max predictors per model.\\
-n\_seeds, seed\_size & EPR-S seed count and size.\\
-iterations\_mode, max\_iterations\_per\_seed & Iterations per seed (\texttt{auto}, \texttt{manual}, or \texttt{converge}); manual requires the max-iterations value.\\
-target\_metric & Objective metric (R2, R2 adj, or Q2 (LOO)).\\
-cov\_type & Covariance type: Non-robust, HC0, HC1, HC2, or HC3.\\
-signif\_lvl & Significance level.\\
-corr\_threshold, vif\_threshold & Correlation threshold and VIF threshold for multicollinearity pruning.\\
-report\_r2\_threshold & Minimum report R$^2$ (training R$^2$ gate for recording models).\\
-clip\_enabled, clip\_low, clip\_high & Toggle and bounds for clipping predictions.\\
-split\_mode & \texttt{none} (full dataset), \texttt{random} (test \%), \texttt{manual} (train/test ID lists), or \texttt{external} (validation file).\\
-external\_path, external\_delimiter & External validation file path and delimiter (when \texttt{split\_mode = external}).\\
-manual\_train\_ids, manual\_test\_ids & ID lists/ranges for manual splits.\\
-random\_test\_size\_percent & Test percentage for random splits.\\
-export\_limit & Max rows written to the model CSV and linked tables (default 5000).\\
-n\_jobs & Parallel jobs (normalized to the allowed maximum).\\
-output\_path & Destination CSV for models.\\
-\end{longtable}
-
-\paragraph{Minimal example}
-\begin{lstlisting}[style=mlrx]
-# Dataset
-data_path: data.csv
-delimiter: ;
-dependent_choice: last
-non_variable_spec: ID
-exclude_constant: true
-constant_threshold: 90
-
-# Method
-method: eprs
-max_vars: 10
-n_seeds: 20
-seed_size: 4
-iterations_mode: auto
-signif_lvl: 0.05
-corr_threshold: 0.90
-vif_threshold: 4.0
-report_r2_threshold: 0.80
-target_metric: R2
-cov_type: HC3
-export_limit: 500
-n_jobs: 4
-
-# Validation
-split_mode: random
-random_test_size_percent: 20
-
-# Output
-output_path: results/models.csv
-clip_enabled: false
-\end{lstlisting}
-
 \subsection{Execution and progress}
 The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
 
