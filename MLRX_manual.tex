@@ -282,11 +282,12 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 % =========================================================
 \section{Operational good practices}
 \begin{itemize}
-  \item Review parameters before each run and save configuration files (\texttt{.conf}) for batch/CLI reproducibility.
-  \item Adjust \emph{Parallel jobs} to available hardware to balance time and resources.
-  \item Use \emph{Iterations mode = Converge} to let EPR-S control iterations by convergence.
-  \item Check collinearity with correlation and VIF thresholds; confirm robustness in \textbf{Validation} and \textbf{Diagnostics} before decisions.
-  \item Keep the CSV clean and document exclusions; for external holdout, preserve identical headers and order.
+  \item Validate inputs before running: preview the CSV to confirm delimiter, target, non-variable columns, and exclusions; apply the constant filter when near-constant predictors should be removed. If you plan an external holdout, keep identical headers, order, and target column across files.
+  \item Let the app prefill EPR-S values with the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5000) to manage how many models are kept and written.
+  \item Set \emph{Parallel jobs} in line with your CPU; the app normalizes this value, but requesting fewer jobs avoids contention on busy machines.
+  \item Always run internal (LOO/k-fold) and, when available, external validation, then inspect \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to confirm stability. Use the recommended covariance toggle in Summary when inference is needed.
+  \item Use \emph{Clip predictions to} only when the response has known bounds, keeping the limits consistent with training data units.
+  \item Save the generated models CSVs and configuration files so future GUI or CLI sessions can reload the exact run context from the embedded metadata.
 \end{itemize}
 
 % =========================================================
