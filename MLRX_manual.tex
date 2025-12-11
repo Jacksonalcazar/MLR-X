@@ -163,11 +163,12 @@ Use this tab to configure cross-validation and external validation for the selec
 Validation results are automatically appended to the \textbf{Models} tab tables when each process completes.
 
 \subsection{\textbf{Diagnostics} tab}
+Provides per-observation diagnostics for the selected model and the corresponding correlation matrix.
 \begin{itemize}
-  \item Dataset filter (Training/Testing/Both) with holdout status propagated.
-  \item Key columns: observation, set, actual and predicted values (standard and LOO), residuals, $z$, hat, standardized residuals, and Cook's distances (standard and LOO).
-  \item \emph{Export CSV} is available when data are visible; it respects the active filter.
-  \item Correlation matrix (lower triangle) with an option to include the dependent variable.
+  \item Model selector with a status message for availability, plus a dataset filter to display \emph{Training only}, \emph{Training and testing}, or \emph{Testing only}; the holdout status propagates automatically.
+  \item Observation diagnostics table showing \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
+  \item \emph{Export CSV} exports the currently visible observation diagnostics using the active dataset filter.
+  \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export for the displayed matrix.
 \end{itemize}
 
 \subsection{\textbf{Visualization} tab}
