@@ -137,9 +137,10 @@ MLR-X organizes its features into tabs within a main window.
 \paragraph{Settings}
 \begin{enumerate}[label=\arabic*.]
   \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is a new, original method implemented in this software (doi.org/xxxxx).
-  \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are the independent starting points used to explore model combinations. Set iterations/seed can run in \textit{Auto} (estimate and apply the maximum per seed automatically), \textit{Manual} (requires \emph{Max iterations per seed}), or \textit{Run until convergence} (may take a long time).
+  \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are the independent starting points used to explore model combinations. Set iterations/seed can run in \textit{auto} (estimate and apply the maximum per seed automatically), \textit{manual} (requires max iterations per seed), or \textit{converge (run until convergence)} (may take a long time). Recommendation buttons help populate these values.
   \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the number of best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation threshold and VIF threshold control multicollinearity pruning, and Minimum report R$^2$ filters low-performing candidates.
-  \item Target metric (R$^2$, adj-R$^2$, or Q$^2$), covariance estimator (Non robust, HC0--HC3), \emph{Clip predictions to}, and recommendation buttons. Non robust keeps the standard OLS variance; HC0--HC3 provide heteroskedasticity-consistent covariance estimates (HC3 is the most conservative for high leverage).
+  \item \textit{Target metric}: (R$^2$, adj-R$^2$, or Q$^2$) sets the scoring objective. \textit{Covariance type}: (Non robust, HC0--HC3) chooses the variance estimator. Non robust keeps the standard OLS variance; HC0 is the classic White estimator; HC1 applies a small-sample scale adjustment; HC2 down-weights high-leverage points through the hat matrix; HC3 is the most conservative, emphasizing leverage adjustments.
+  \item \emph{Clip predictions to}: define lower and/or upper bounds to constrain predicted values for scoring and exports.
 \end{enumerate}
 
 \subsection{\textbf{Models} tab}
