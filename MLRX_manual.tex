@@ -111,13 +111,13 @@ The CLI-enabled platforms let you run the full pipeline without the GUI by suppl
 
 % =========================================================
 \section{Requirements and installation}
-The distributed builds are self-contained downloads and do not require installers or shortcut generators. Place each executable in your preferred folder. Optionally, add that folder to your system \texttt{PATH} so you can launch \verb|MLR-X| from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate build and follow these steps:
+The distributed packages are self-contained downloads and do not require installers or shortcut generators. Place each executable in your preferred folder. Optionally, add that folder to your system \texttt{PATH} so you can launch \verb|MLR-X| from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate package and follow these steps:
 
-\subsection{Setting up the portable builds}
+\subsection{Setting up the portable packages}
 \begin{itemize}
   \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. To register a desktop launcher:
         \begin{enumerate}[label=\arabic*.]
-          \item Build the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
+          \item Create the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
           \item \texttt{sudo mkdir -p /opt/MLRX}
           \item \texttt{sudo cp MLRX /opt/MLRX/}\\
                 \texttt{sudo cp icon/icon.ico /opt/MLRX/}
@@ -131,7 +131,7 @@ The distributed builds are self-contained downloads and do not require installer
           \item \texttt{update-desktop-database ~/.local/share/applications}\\
                 \texttt{\# or sudo update-desktop-database /usr/share/applications}
         \end{enumerate}
-  \item \textbf{Windows GUI}: download the GUI build, place \texttt{MLR-X.exe} in a convenient folder, and run it directly.
+  \item \textbf{Windows GUI}: download the GUI package, place \texttt{MLR-X.exe} in a convenient folder, and run it directly.
   \item \textbf{Windows GUI+CLI}: same as Windows GUI, with the Run CLI option enabled.
   \item \textbf{macOS GUI}: download the app bundle and run it from your preferred location (e.g., move it to \texttt{/Applications} if desired).
   \item \textbf{macOS GUI+CLI}: same as macOS GUI, with the Run CLI option enabled.
@@ -219,7 +219,7 @@ Provides per-observation diagnostics and the correlation matrix for the active m
   \item Inputs: browse/load the CSV and an optional results file (unlocks model-aware options) with a readiness status line.
   \item Variable scope and axes: choose \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches to histogram mode with fixed-bin or custom-breakpoint controls.
   \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model is active), aspect ratios (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog for axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
-  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution). \emph{Create filtered dataset} builds a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range; the app warns about missing models in the requested range.
+  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution). \emph{Create filtered dataset} creates a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range; the app warns about missing models in the requested range.
 \end{itemize}
 
 \subsection{\textbf{Help} tab}
@@ -297,7 +297,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 
 % =========================================================
 \section{Command-line (CLI) usage}
-Available in the Linux, macOS GUI+CLI, and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
+Available on Linux and on the macOS and Windows GUI+CLI packages to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
 
 \subsection{Invocation}
 \begin{lstlisting}[style=mlrx]
@@ -334,7 +334,7 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 % =========================================================
 \section{Troubleshooting and FAQ}
 \begin{itemize}
-  \item \textbf{The GUI does not open}: download the corresponding build again and ensure the binary is not blocked by antivirus.
+  \item \textbf{The GUI does not open}: download the corresponding package again and ensure the binary is not blocked by antivirus.
   \item \textbf{CSV does not load}: verify path, permissions, and delimiter; use \emph{Preview data}.
   \item \textbf{No models exported}: review \emph{Minimum report R$^2$} and \emph{VIF threshold}.
   \item \textbf{External validation fails}: the target column must match and the CSV must contain the same predictors.
