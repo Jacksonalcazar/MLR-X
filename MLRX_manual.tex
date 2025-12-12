@@ -328,6 +328,37 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 \end{itemize}
 
 % =========================================================
+\section{Parameter and chart reference}
+
+\subsection{Key configuration parameters}
+\begin{itemize}
+  \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models.
+  \item \textbf{Seed size}: sets the initial predictor count per seed; values near half the predictor limit balance exploration and computation.
+  \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, manual, or convergence modes.
+  \item \textbf{Max predictors per model}: upper bound on predictors allowed in any candidate model.
+  \item \textbf{Significance level}: threshold for coefficient inclusion during model refinement.
+  \item \textbf{Correlation threshold}: maximum tolerated pairwise correlation before pruning to control redundancy.
+  \item \textbf{VIF threshold}: veto for models with multicollinearity above the specified variance inflation factor.
+  \item \textbf{Minimum report R$^2$}: training R$^2$ cutoff applied before metrics are compared with the optimization target.
+  \item \textbf{Top models to report}: limit on retained models; aligned with the CSV export limit.
+  \item \textbf{Target metric}: optimization objective (R$^2$, adjusted R$^2$, or Q$^2$).
+  \item \textbf{Covariance estimator}: robust or non-robust variance choice for standard errors and inference.
+  \item \textbf{Clip predictions}: lower/upper bounds used when predictions must respect known limits.
+  \item \textbf{Parallel jobs}: requested worker count for parallel tasks, normalized to available CPU cores.
+\end{itemize}
+
+\subsection{Interpreting key charts}
+\begin{itemize}
+  \item \textbf{Predicted vs Actual}: alignment with the identity line indicates accurate calibration; systematic deviations flag bias.
+  \item \textbf{Residuals vs Predicted/Actual}: random scatter suggests homoskedasticity and linearity; structure signals misspecification.
+  \item \textbf{Scale--Location}: spreads residuals against fitted values to reveal variance patterns; flattening curves indicate stable variance.
+  \item \textbf{QQ residuals}: departures from the diagonal highlight non-normal residual distributions.
+  \item \textbf{Williams plot}: combines leverage and standardized residuals to spot influential observations beyond leverage and residual cutoffs.
+  \item \textbf{Cook's distance vs leverage}: high distances at elevated leverage identify observations with strong influence on estimates.
+  \item \textbf{Correlation heatmaps}: visualize pairwise predictor relationships; dark blocks expose multicollinearity risks.
+\end{itemize}
+
+% =========================================================
 \section{Troubleshooting and FAQ}
 \begin{itemize}
   \item \textbf{The GUI does not open}: download the corresponding package again and ensure the binary is not blocked by antivirus.
