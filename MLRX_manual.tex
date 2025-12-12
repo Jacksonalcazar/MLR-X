@@ -275,7 +275,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 
 \subsection{Engine good practices}
 \begin{itemize}
-  \item Seeds: at least as many as predictors; use \emph{Recommended} to auto-populate sensible values.
+  \item Number of Seeds: Should equal or exceed the number of predictors. Use the ``Recommended'' button for automatic calculation. Increase if premature convergence occurs. Optimal: $>$1{,}000 seeds for robust analysis.
   \item Seed size: about half of \emph{Max predictors} balances exploration and feasibility.
   \item VIF threshold: keep it $<5$ to curb multicollinearity; tune correlation threshold between 0 and 1 alongside the chosen significance level.
   \item Prefer EPR-S for large predictor spaces; reserve all subsets for small designs or confirmatory sweeps.
