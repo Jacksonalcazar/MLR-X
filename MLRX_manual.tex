@@ -243,8 +243,8 @@ Summarizes product information and support links. The About panel shows the MLR-
 
 \subsection{Progress and cancellation}
 \begin{itemize}
-  \item The progress bar tracks completion across stages, and the \emph{Log} shows model counts, filters, CPU times, and other events in real time.
-  \item \emph{Cancel} changes the status to \emph{Cancelling...}, disables the \emph{Cancel} button, signals all workers to stop, and records the request in the log. Errors raise a dialog, set status to \emph{Error}, and keep the run controls enabled for a new attempt.
+  \item The progress bar summarizes each stage, and the \emph{Log} lists model counts and timing as they occur.
+  \item \emph{Cancel} stops workers, marks the status as \emph{Cancelling...}, and notes the request in the log. Errors set status to \emph{Error} and leave the run controls ready for another try.
 \end{itemize}
 
 \subsection{Completion and outputs}
