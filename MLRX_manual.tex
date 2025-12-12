@@ -127,7 +127,7 @@ Supported platforms and architectures:
 
 \subsection{Setting up the portable packages}
 \begin{itemize}
-  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. To register a desktop launcher:
+  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. Optional: Desktop launcher (GNOME/KDE). Requires \texttt{desktop-file-utils} (for \texttt{update-desktop-database}). The \texttt{MLRX.desktop} file ships with the download. To register the desktop launcher:
         \begin{enumerate}[label=\arabic*.]
           \item Create the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
           \item \texttt{sudo mkdir -p /opt/MLRX}
