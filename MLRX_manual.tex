@@ -279,6 +279,8 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
 \end{enumerate}
 \medskip
+Runs are deterministic: identical datasets, configuration options, and seed lists produce the same model paths and exported results.
+\medskip
 EPR-S is an original method in this software (doi.org/xxxxx).
 
 \subsection{All subsets (exhaustive)}
@@ -328,7 +330,7 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 \section{Operational good practices}
 \begin{itemize}
   \item Validate inputs before running: preview the CSV to confirm the delimiter, target column, non-variable columns, and exclusions. Apply the constant filter when near-constant predictors should be removed. If planning an external holdout, ensure identical headers, column order, and target definition across all files.
-  \item Choose the search strategy deliberately: use EPR-S for efficient exploration of large predictor spaces guided by stochastic seeds, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. Prefer EPR-S for large or high-dimensional designs; reserve All Subsets for small datasets or confirmatory analyses.
+  \item Choose the search strategy deliberately: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. Prefer EPR-S for large or high-dimensional designs; reserve All Subsets for small datasets or confirmatory analyses.
   \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors; use the \emph{Recommended} button for automatic calculation. Increase this value if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility.
   \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
   \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0--1) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
