@@ -109,16 +109,17 @@ The distributed builds are self-contained downloads and do not require installer
 \end{itemize}
 
 \section{Interface tour (GUI)}
-MLR-X organizes its features into tabs within a main window.
+The main window presents a tabbed workflow. A status banner in \textbf{Setup \& Run} reports the current task and progress, while the bottom status bar echoes the active action. Tabs activate automatically once their required inputs are available.
 
 \subsection{\textbf{Setup \& Run} tab}
+Organizes dataset loading, splitting, model-search settings, and run controls.
 \paragraph{Dataset}
 \begin{enumerate}[label=\arabic*.]
-  \item Select the CSV (or use \emph{Browse}).
-  \item Define the delimiter (\verb|;| by default), the dependent variable, and non-predictor columns.
-  \item Exclude observations by ID or range (e.g., \texttt{3,9,4-8}).
-  \item Enable \emph{Exclude nearly constant predictors} and set the percentage threshold.
-  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the top-right corner of the frame; the task name appears in the bottom-right corner.
+  \item Choose the CSV via the field or \emph{Browse} button.
+  \item Set the delimiter (\verb|;| by default), target (dependent variable), and any non-predictor columns.
+  \item Optionally exclude observations by ID or ranges (e.g., \texttt{3,9,4-8}).
+  \item Enable \emph{Exclude nearly constant predictors} and provide the percentage threshold to drop near-zero-variance variables.
+  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the top-right corner; the active task shows in the lower-right footer.
 \end{enumerate}
 
 \paragraph{Data splitting}
@@ -126,74 +127,74 @@ Choose how to partition the dataset for training and testing.
 \begin{itemize}
   \item \textbf{None}: use the full dataset.
   \item \textbf{Random}: specify \emph{Test size (\%)}.
-  \item \textbf{Manual}: lists or ranges for train/test without overlap.
+  \item \textbf{Manual}: provide train/test lists or ranges without overlap.
 \end{itemize}
-If you select \textbf{None} (full dataset), you can still perform external validation later in the \textbf{Validation} tab by loading an external file.
+If you select \textbf{None}, external validation remains available later from the \textbf{Validation} tab by loading a separate file.
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
-   \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is a new, original method implemented in this software (doi.org/xxxxx).
-   \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are the independent starting points used to explore model combinations. Recommendation buttons help populate these values. Set iterations/seed can run in \textit{auto} (estimate and apply the maximum per seed automatically), \textit{manual} (requires max iterations per seed), or \textit{converge (run until convergence)}, and this last option may take a long time.
-  \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the number of best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation threshold and Variance Inflation Factor (VIF) threshold control multicollinearity pruning. Minimum report R$^2$ uses the training-set R$^2$ as a gatekeeper even when optimizing alternative metrics.
-  \item The \emph{target metric} (R$^2$, adj-R$^2$, or Q$^2$) sets the scoring objective for model evaluation, while the \emph{covariance type} (Non-robust, HC0--HC3) selects the heteroskedasticity-consistent variance estimator for reliable inference. Non-robust maintains the standard OLS covariance matrix, valid only under homoskedasticity. HC0 implements the classic White (1980) estimator, replacing the constant error variance with squared residuals. HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations through the diagonal of the hat matrix ($h_i$), using the weighting factor $1/(1-h_i)$. HC3 applies the most conservative leverage adjustment with weighting factor $1/(1-h_i)^2$, approximating the jackknife estimator and providing maximum protection against influential observations. The progression from HC0 to HC3 represents increasing robustness to both heteroskedasticity and leverage points in finite samples.
-   \item \emph{Clip predictions to}: define lower and/or upper bounds to constrain predicted values for scoring and exports.
+    \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is an original method in this software (doi.org/xxxxx).
+    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence; can be lengthy).
+    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation and VIF thresholds gate multicollinearity; Minimum report R$^2$ uses the training-set R$^2$ as a gatekeeper even when optimizing alternative metrics.
+    \item Target metric and covariance: select \emph{R$^2$}, \emph{adj-R$^2$}, or \emph{Q$^2$} as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3). Non-robust keeps the standard OLS covariance (assumes homoskedasticity). HC0 replaces constant error variance with squared residuals (White, 1980). HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations using $1/(1-h_i)$. HC3 uses $1/(1-h_i)^2$ for a jackknife-like correction, offering the strongest finite-sample protection against leverage.
+    \item \emph{Clip predictions to}: set lower and/or upper bounds to constrain predicted values for scoring and exports.
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Displays three synchronized tables summarizing training, internal validation, and external validation results. The upper panel allows loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), selecting the sorting criterion, and filtering models by predictors.
+Displays three synchronized tables for training, internal validation, and external validation. The header controls let you load a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), pick the sorting criterion, and filter models by predictors.
 \begin{itemize}
-  \item \textbf{Top models training}: shows each model together with its predictor set, number of predictors (N pred), goodness-of-fit statistics (R$^2$, adjusted R$^2$, RMSE, MAE, and $s$), and multicollinearity indicators (maximum and average VIF).
-  \item \textbf{Top models internal validation (CV)}: reports the corresponding LOO and k-fold performance metrics, including Q$^2$, RMSE, MAE, and $s$ for each procedure.
-  \item \textbf{Top models external validation}: presents the external prediction results using Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (R$^2_{\mathrm{ext}}$), Q$^2_{\mathrm{F3}}$, and the external RMSE and MAE values.
+  \item \textbf{Top models training}: predictor set, predictor count (N pred), goodness-of-fit (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity (maximum/average VIF).
+  \item \textbf{Top models internal validation (CV)}: LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$).
+  \item \textbf{Top models external validation}: external prediction metrics Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$/R$^2_{\mathrm{ext}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
 \end{itemize}
-All three tables refresh automatically and remain synchronized with the Validation, Diagnostics, Visualization, and Summary tabs, which become available as soon as a model set is generated when the run analysis is completed or when model results are loaded.
+All three tables update automatically and stay synchronized with the Validation, Diagnostics, Visualization, and Summary tabs once a model set exists (after a run or when loading saved results).
 
 \subsection{\textbf{Validation} tab}
-Use this tab to configure cross-validation and external validation for the selected models.
+Configures cross-validation and external validation for the chosen models.
 \begin{itemize}
   \item Model selection: \emph{Top}, \emph{Multiple} (range like \texttt{1-5,7,9}), or \emph{All}.
-  \item \textbf{LOO and k-fold}: internal validation with \emph{Leave One Out (LOO)} and/or \emph{Folds} and \emph{Repeats}.
-  \item \textbf{External validation}: select file and delimiter; requires the same target column as the training set.
+  \item \textbf{LOO and k-fold}: internal validation with \emph{Leave One Out (LOO)} and/or \emph{Folds} plus \emph{Repeats}.
+  \item \textbf{External validation}: choose file and delimiter; requires the same target column as the training set.
 \end{itemize}
-Validation results are automatically appended to the Models tab tables when each process completes.
+Validation outputs append automatically to the Models tab when finished.
 
 \subsection{\textbf{Diagnostics} tab}
-Provides per-observation diagnostics for the selected model and the corresponding correlation matrix.
+Provides per-observation diagnostics and the correlation matrix for the active model.
 \begin{itemize}
-  \item Model selector with a status message for availability, plus a dataset filter to display \emph{Training only}, \emph{Training and testing}, or \emph{Testing only}; the holdout status propagates automatically.
-  \item Observation diagnostics table showing \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
-  \item \emph{Export CSV} exports the currently visible observation diagnostics using the active dataset filter.
-  \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export for the displayed matrix.
+  \item Model selector with status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); holdout status propagates automatically.
+  \item Observation diagnostics table with \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
+  \item \emph{Export CSV} saves the currently visible diagnostics using the active dataset filter.
+  \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export.
 \end{itemize}
 
 \subsection{\textbf{Visualization} tab}
 \begin{itemize}
-  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization analysis runs per model and can insert its charts into the plot list once computed.
+  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization runs per model and can insert charts into the plot list when complete.
   \item Chart list: correlation heatmaps (with or without the dependent variable), Predicted vs Actual (standard and by LOO), residuals vs actual/predictions (standard and by LOO), Scale--Location (standard and by LOO), QQ residuals (standard and by LOO), residual distribution (standard and by LOO), Williams plot (standard and by LOO), Cook's distance vs leverage (standard and by LOO), leverage plot, and Predicted vs Leverage.
-  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or an auto-detected extra column), identity line (for predicted vs actual and QQ residual plots), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axis ranges.
+  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or auto-detected extra column), identity line (Predicted vs Actual and QQ residuals), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axes.
   \item Marker customization: separate color and marker-style pickers for training and testing points, plus marker size control; heatmaps disable incompatible controls automatically.
-  \item Axes and export: manual limits for X/Y, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
+  \item Axes and export: manual X/Y limits, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
 \end{itemize}
 
 \subsection{\textbf{Summary} tab}
 \begin{itemize}
-  \item Model selector with availability status plus a \emph{Use recommended covariance} toggle (applies BP/White and leverage diagnostics before switching to the suggested estimator) and \emph{Export Summary...} to save the full text dossier. A scrollable text pane renders the summary for the current model.
-  \item Overview section: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
-  \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and reason/notes that triggered the robust choice.
+  \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator) and \emph{Export Summary...} to save the full text dossier. A scrollable pane renders the current model summary.
+  \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
+  \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and notes that triggered the robust choice.
   \item Coefficients and equation: coefficient table with standard errors, $t$, $p$, and confidence intervals; equations rendered with and without errors.
-  \item Metrics tables: grouped training metrics (R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF max/avg, $|r|_{\max}$), internal validation (LOO and k-fold blocks with repeat note), and external validation (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$/R$^2_{\mathrm{ext}}$, Q$^2_{\mathrm{F3}}$, RMSE, MAE).
+  \item Metrics: training block (R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF max/avg, $|r|_{\max}$), internal validation (LOO and k-fold with repeat note), and external validation (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$/R$^2_{\mathrm{ext}}$, Q$^2_{\mathrm{F3}}$, RMSE, MAE).
 \end{itemize}
 
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
 \begin{itemize}
-  \item Dataset and results inputs: browse/load the CSV and an optional results file (unlocks model-based options) with a status line indicating readiness.
-  \item Variable scope and axes: pick \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches the plot mode, with bin controls for a fixed number of bins or custom breakpoints.
-  \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model context is active), aspect ratio presets (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog to set axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
-  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution by default). \emph{Create filtered dataset} builds a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range, warning about any missing models in the requested range.
+  \item Inputs: browse/load the CSV and an optional results file (unlocks model-aware options) with a readiness status line.
+  \item Variable scope and axes: choose \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches to histogram mode with fixed-bin or custom-breakpoint controls.
+  \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model is active), aspect ratios (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog for axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
+  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution). \emph{Create filtered dataset} builds a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range; the app warns about missing models in the requested range.
 \end{itemize}
 
 \subsection{\textbf{Help} tab}
-Summarizes product information and support links for the application. The About panel shows the MLR-X name, version, license notice, and tagline. Quick links open the homepage and contact email, and buttons provide access to the bundled manual, citation dialog, bug-report form, and donation page.
+Summarizes product information and support links. The About panel shows the MLR-X name, version, license notice, and tagline. Quick links open the homepage and contact email, and buttons provide the bundled manual, citation dialog, bug-report form, and donation page.
 
 % =========================================================
 \section{Analysis flow and process handling}
