@@ -72,13 +72,42 @@
 \newpage
 
 % =========================================================
-\section{Distributions and compatibility}
+\section{Distribution Packages}
+Packages are portable and do not require external Python installations or scientific libraries.
+
+\subsection{Platform Support}
 \begin{itemize}
-  \item \textbf{Available builds}: self-contained binaries for Linux, macOS (GUI and GUI+CLI), Windows GUI, and Windows GUI+CLI.
-  \item \textbf{Supported platforms}: 64-bit Windows, Linux, or macOS. Builds are portable and do not require external Python installations or scientific libraries.
-  \item \textbf{Console support}: the CLI-enabled builds (Linux, macOS GUI+CLI, and Windows GUI+CLI) let you run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
-  \item \textbf{Hardware}: designed for x86\_64 processors; performance scales with available CPU cores and memory when handling large datasets.
+  \item \textbf{Linux}: Single binary executable
+  \item \textbf{macOS}: Application bundles (.app)
+  \item \textbf{Windows}: Portable executables (.exe)
 \end{itemize}
+
+\subsection{Interface Variants}
+
+\subsubsection{GUI-Only Versions}
+\begin{itemize}
+  \item Launch only the graphical user interface
+  \item No terminal/console window displayed
+  \item Available for: macOS (.app), Windows (.exe)
+\end{itemize}
+
+\subsubsection{GUI+CLI Versions}
+\begin{itemize}
+  \item Launch both graphical interface AND terminal/console
+  \item Allow simultaneous GUI and command-line interaction
+  \item Terminal remains open for CLI commands alongside GUI
+  \item Available for: macOS (.app), Windows (.exe)
+\end{itemize}
+
+\subsubsection{Linux Behavior}
+\begin{itemize}
+  \item Single binary supports both modes
+  \item GUI-only interface by default
+  \item CLI accessible via command-line arguments
+  \item No separate GUI+CLI variant needed
+\end{itemize}
+
+The CLI-enabled platforms let you run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
 
 % =========================================================
 \section{Requirements and installation}
