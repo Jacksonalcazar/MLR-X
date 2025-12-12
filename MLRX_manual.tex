@@ -286,7 +286,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 \subsection{Model CSV}
 \begin{itemize}
   \item Semicolon-separated file with columns for model ID, predictors, predictor count, training metrics (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity indicators (maximum and average VIF).
-  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2$F1, Q$^2$F2 (external R$^2$), Q$^2$F3, RMSE, $s$, and MAE.
+  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (external R$^2$), Q$^2_{\mathrm{F3}}$, RMSE, $s$, and MAE.
   \item The first row stores a serialized metadata block (dataset path, delimiter, dependent/ignored columns, constant-filter threshold, exclusions, target metric, search method, covariance type, iteration mode, split configuration, clipping limits, k-fold settings, validation file/delimiter, export limit, models found/explored/reported, and CPU times) so the UI can reload the configuration accurately.
   \item \emph{Export limit} caps the number of rows written; the exported table follows the training-order sort and mirrors the Models tab, including validation tables when available.
 \end{itemize}
