@@ -349,16 +349,16 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 
 \subsection{Interpreting key charts}
 \begin{itemize}
+  \item \textbf{Correlation heatmaps}: visualize pairwise predictor relationships; dark blocks expose multicollinearity risks.
   \item \textbf{Predicted vs Actual}: alignment with the identity line indicates accurate calibration; systematic deviations flag bias.
   \item \textbf{Residuals vs Predicted/Actual}: random scatter suggests homoskedasticity and linearity; structure signals misspecification.
-  \item \textbf{Residual distribution}: histogram or density of residuals to spot asymmetry, heavy tails, or outliers relative to a centered, bell-shaped pattern.
   \item \textbf{Scale--Location}: spreads residuals against fitted values to reveal variance patterns; flattening curves indicate stable variance.
+  \item \textbf{Residual distribution}: histogram or density of residuals to spot asymmetry, heavy tails, or outliers relative to a centered, bell-shaped pattern.
   \item \textbf{QQ residuals}: departures from the diagonal highlight non-normal residual distributions.
-  \item \textbf{Williams plot}: combines leverage and standardized residuals to spot influential observations beyond leverage and residual cutoffs.
-  \item \textbf{Cook's distance vs leverage}: high distances at elevated leverage identify observations with strong influence on estimates.
   \item \textbf{Leverage plot}: leverage values across observations reveal influential points relative to the threshold.
+  \item \textbf{Cook's distance vs leverage}: high distances at elevated leverage identify observations with strong influence on estimates.
+  \item \textbf{Williams plot}: combines leverage and standardized residuals to spot influential observations beyond leverage and residual cutoffs.
   \item \textbf{Predicted vs Leverage}: blends fitted values with leverage to isolate influence patterns across the prediction range.
-  \item \textbf{Correlation heatmaps}: visualize pairwise predictor relationships; dark blocks expose multicollinearity risks.
 \end{itemize}
 
 % =========================================================
