@@ -118,6 +118,13 @@ CLI-enabled platforms allow running the full pipeline without the GUI by supplyi
 \section{Requirements and installation}
 The distributed packages are self-contained downloads and do not require installers or shortcut generators. Place each executable in a preferred folder. Optionally, add that folder to the system \texttt{PATH} so \verb|MLR-X| can launch from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate package and follow these steps:
 
+Supported platforms and architectures:
+\begin{itemize}
+  \item Windows 10/11 (64-bit)
+  \item macOS X (Arm64)
+  \item Ubuntu 20.04 (x86-64)
+\end{itemize}
+
 \subsection{Setting up the portable packages}
 \begin{itemize}
   \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. To register a desktop launcher:
