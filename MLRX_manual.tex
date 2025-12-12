@@ -108,11 +108,11 @@ Packages are portable and do not require external Python installations or scient
 \end{itemize}
 
 \medskip
-The CLI-enabled platforms let you run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
+CLI-enabled platforms allow running the full pipeline without the GUI by supplying a \texttt{config.conf} file.
 
 % =========================================================
 \section{Requirements and installation}
-The distributed packages are self-contained downloads and do not require installers or shortcut generators. Place each executable in your preferred folder. Optionally, add that folder to your system \texttt{PATH} so you can launch \verb|MLR-X| from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate package and follow these steps:
+The distributed packages are self-contained downloads and do not require installers or shortcut generators. Place each executable in a preferred folder. Optionally, add that folder to the system \texttt{PATH} so \verb|MLR-X| can launch from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate package and follow these steps:
 
 \subsection{Setting up the portable packages}
 \begin{itemize}
@@ -122,7 +122,7 @@ The distributed packages are self-contained downloads and do not require install
           \item \texttt{sudo mkdir -p /opt/MLRX}
           \item \texttt{sudo cp MLRX /opt/MLRX/}\\
                 \texttt{sudo cp icon/icon.ico /opt/MLRX/}
-          \item Update the \texttt{Exec} and \texttt{Icon} paths in \texttt{MLRX.desktop} if you choose a different installation directory.
+          \item Update the \texttt{Exec} and \texttt{Icon} paths in \texttt{MLRX.desktop} if a different installation directory is used.
           \item Install the launcher by copying it to your applications directory and mark the file as executable:
           \item \texttt{chmod +x MLRX.desktop}
           \item \texttt{cp MLRX.desktop ~/.local/share/applications/}
@@ -159,7 +159,7 @@ Choose how to partition the dataset for training and testing.
   \item \textbf{Random}: specify \emph{Test size (\%)}.
   \item \textbf{Manual}: provide train/test lists or ranges without overlap.
 \end{itemize}
-If you select \textbf{None}, external validation remains available later from the Validation tab by loading a separate file.
+Selecting \textbf{None} keeps external validation available later from the Validation tab by loading a separate file.
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
@@ -171,7 +171,7 @@ If you select \textbf{None}, external validation remains available later from th
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Displays three synchronized tables for training, internal validation, and external validation. The header controls let you load a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), pick the sorting criterion, and filter models by predictors.
+Displays three synchronized tables for training, internal validation, and external validation. The header controls allow loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), picking the sorting criterion, and filtering models by predictors.
 \begin{itemize}
   \item \textbf{Top models training}: predictor set, predictor count (N pred), goodness-of-fit (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity (maximum/average VIF).
   \item \textbf{Top models internal validation (CV)}: LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$).
@@ -251,7 +251,7 @@ Summarizes product information and support links. The About panel shows the MLR-
 \begin{enumerate}
   \item When finished, the status becomes \emph{Completed}; \emph{Run analysis} re-enables and \emph{Cancel} disables. Validation, Diagnostics, Visualization, and Summary tabs are unlocked with the new results, and any external holdout is refreshed if available.
   \item Results load automatically into the tables, summary pane, and downstream tabs, and the CSV is written to the confirmed path (\texttt{models.csv} by default). The header line embeds run metadata as JSON between \verb|#EPRS-S ... ;#|, and the most recent export path is remembered for the next session.
-  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and notifies you with an information dialog.
+  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and shows an information dialog.
 \end{enumerate}
 
 % =========================================================
@@ -312,7 +312,7 @@ MLRX.exe config.conf or MLRX.exe path/to/config.conf
 If additional arguments are supplied, the program shows the expected syntax and exits.
 
 \subsection{Configuration file structure}
-Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options let you select by index using \texttt{selected option: <n>} inside the block (for example, to pick a delimiter or target metric).
+Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options allow selecting by index using \texttt{selected option: <n>} inside the block (for example, to pick a delimiter or target metric).
 \subsection{Execution and progress}
 The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
 
@@ -322,8 +322,8 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 % =========================================================
 \section{Operational good practices}
 \begin{itemize}
-  \item Validate inputs before running: preview the CSV to confirm delimiter, target, non-variable columns, and exclusions; apply the constant filter when near-constant predictors should be removed. If you plan an external holdout, keep identical headers, order, and target column across files.
-  \item Choose the search method deliberately: use EPR-S when you need faster exploration guided by seeds, or All subsets when you want exhaustive coverage but can tolerate longer runtimes.
+  \item Validate inputs before running: preview the CSV to confirm delimiter, target, non-variable columns, and exclusions; apply the constant filter when near-constant predictors should be removed. When planning an external holdout, keep identical headers, order, and target column across files.
+  \item Choose the search method deliberately: EPR-S suits faster exploration guided by seeds, while All subsets favors exhaustive coverage when longer runtimes are acceptable.
   \item Let the app prefill EPR-S values with the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5000) to manage how many models are kept and written.
   \item Tune statistical thresholds before running: set \emph{Significance level} to control predictor inclusion, and set the \emph{Correlation threshold} and \emph{Variance Inflation Factor (VIF) threshold} to prune multicollinearity; revisit these if too many or too few models survive.
   \item Set \emph{Parallel jobs} in line with your CPU; the app normalizes this value, but requesting fewer jobs avoids contention on busy machines.
