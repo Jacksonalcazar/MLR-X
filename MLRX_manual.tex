@@ -273,14 +273,6 @@ EPR-S is an original method in this software (doi.org/xxxxx).
 \subsection{All subsets (exhaustive)}
 Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small (practical below roughly 25 variables) because the number of combinations grows quickly.
 
-\subsection{Engine good practices}
-\begin{itemize}
-  \item Number of Seeds: Should equal or exceed the number of predictors. Use the \emph{Recommended} button for automatic calculation. Increase if premature convergence occurs. Optimal: $>$1{,}000 seeds for robust analysis.
-  \item Seed size: about half of \emph{Max predictors} balances exploration and feasibility.
-  \item VIF threshold: keep it $<5$ to curb multicollinearity; tune correlation threshold between 0 and 1 alongside the chosen significance level.
-  \item Prefer EPR-S for large predictor spaces; reserve all subsets for small designs or confirmatory sweeps.
-\end{itemize}
-
 % =========================================================
 \section{Result format and exports}
 \subsection{Model CSV}
