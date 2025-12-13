@@ -319,7 +319,7 @@ MLRX.exe config.conf or MLRX.exe path/to/config.conf
 If additional arguments are supplied, the program shows the expected syntax and exits.
 
 \subsection{Configuration file structure}
-Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options allow selecting by index using \texttt{selected option} inside the block. Point 13 includes an example configuration file.
+Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options can be selected by index using \texttt{selected option} inside the block. Section 13 includes a complete example configuration file.
 \subsection{Execution and progress}
 The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
 
