@@ -317,6 +317,7 @@ Available on Linux and on the macOS and Windows GUI+CLI packages to run the full
 MLRX.exe config.conf or MLRX.exe path/to/config.conf
 \end{lstlisting}
 If additional arguments are supplied, the program shows the expected syntax and exits.
+Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"} or \texttt{MLRX.exe "C:\\path with spaces\\config.conf"}).
 
 \subsection{Configuration file structure}
 Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options can be selected by index using \texttt{selected option} inside the block. Section 13 includes a complete example configuration file.
@@ -325,6 +326,7 @@ The CLI loads the configuration, prints the dataset name, available predictors, 
 
 \subsection{Output}
 Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Minimum report R$^2$ filter, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
+The output path can be changed in the configuration file; by default the CLI writes \texttt{models.csv} to the current working directory.
 
 % =========================================================
 \section{Operational good practices}
