@@ -127,31 +127,44 @@ Supported platforms and architectures:
 
 \subsection{Setting up the portable packages}
 \begin{itemize}
-  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. Optional: Desktop launcher (GNOME/KDE). Requires \texttt{desktop-file-utils} (for \texttt{update-desktop-database}). The \texttt{MLRX.desktop} file ships with the download. To register the desktop launcher:
-        \begin{enumerate}[label=\arabic*.]
-          \item Create the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
-\begin{lstlisting}[language=bash]
+  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed.
+
+  \begin{enumerate}[label=\arabic*.]
+    \item Create a stable installation directory and copy the executable (and icon, if desired).
+\begin{lstlisting}[style=mlrx]
 sudo mkdir -p /opt/MLRX
 sudo cp MLRX /opt/MLRX/
+sudo chmod +x /opt/MLRX/MLRX
+
+sudo mkdir -p /opt/MLRX/icon
 sudo cp icon/icon.ico /opt/MLRX/
 \end{lstlisting}
-          \item Update the \texttt{Exec} and \texttt{Icon} paths in \texttt{MLRX.desktop} if a different installation directory is used.
-          \item Install the launcher by copying it to your applications directory and mark the file as executable:
-\begin{lstlisting}[language=bash]
+
+    \item Optionally add the installation directory to the \texttt{PATH} (recommended for CLI usage).
+\begin{lstlisting}[style=mlrx]
+# For the current session
+export PATH=/opt/MLRX:$PATH
+
+# To persist (choose one, depending on your shell)
+echo 'export PATH=/opt/MLRX:$PATH' >> ~/.bashrc
+# or
+echo 'export PATH=/opt/MLRX:$PATH' >> ~/.zshrc
+\end{lstlisting}
+
+    \item (Optional) Register a desktop launcher (GNOME/KDE). If the package includes \texttt{MLRX.desktop}, update its \texttt{Exec} and \texttt{Icon} fields to match the installation paths, then install it.
+\begin{lstlisting}[style=mlrx]
 chmod +x MLRX.desktop
 cp MLRX.desktop ~/.local/share/applications/
-# or for all users:
-# sudo cp MLRX.desktop /usr/share/applications/
 \end{lstlisting}
-          \item Refresh the desktop launcher database (optional but recommended):
-\begin{lstlisting}[language=bash]
-update-desktop-database ~/.local/share/applications
-# or sudo update-desktop-database /usr/share/applications
+
+    \item (Optional) Refresh the application database (only if the command is available on the distribution).
+\begin{lstlisting}[style=mlrx]
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
 \end{lstlisting}
-        \end{enumerate}
+  \end{enumerate}
   \item \textbf{Windows GUI}: download the GUI package, place \texttt{MLRX.exe} in a convenient folder, and run it directly.
   \item \textbf{Windows GUI+CLI}: same as Windows GUI, with the Run CLI option enabled.
-  \item \textbf{macOS GUI}: download the app bundle and run it from your preferred location (e.g., move it to \texttt{/Applications} if desired).
+  \item \textbf{macOS GUI}: download the app bundle and run it from a preferred location (e.g., move it to \texttt{/Applications} if desired).
   \item \textbf{macOS GUI+CLI}: same as macOS GUI, with the Run CLI option enabled.
 \end{itemize}
 
