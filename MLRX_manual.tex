@@ -310,10 +310,67 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 \subsection{Model CSV}
 \begin{itemize}
   \item Semicolon-separated file with columns for model ID, predictors, predictor count, training metrics (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity indicators (maximum and average VIF).
-  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (R$^2_{\mathrm{ext}}$), Q$^2_{\mathrm{F3}}$, RMSE, $s$, and MAE.
+  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, $s$, and MAE.
   \item The end of the first row stores a serialized metadata block (dataset path, delimiter, dependent/ignored columns, constant-filter threshold, exclusions, target metric, search method, covariance type, iteration mode, split configuration, clipping limits, k-fold settings, validation file/delimiter, export limit, models found/explored/reported, and CPU times) so the UI can reload the configuration accurately.
   \item \emph{Export limit} caps the number of rows written; the exported table follows the training-order sort and mirrors the Models tab, including validation tables when available.
 \end{itemize}
+
+\subsubsection{External validation metrics (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$)}
+
+External validation metrics are computed on the external (test) set using the sum of squared prediction errors (SSE) and follow established QSAR conventions, differing in the choice of reference variance used for normalization.
+
+\begin{itemize}
+
+  \item \textbf{Q$^2_{\mathrm{F1}}$}: computed as
+  \[
+  Q^2_{\mathrm{F1}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the denominator represents the variance of the external responses measured relative to the \emph{training-set mean}. This formulation evaluates external predictivity using the training calibration reference and penalizes deviations from the mean value learned during model fitting, consistent with the external validation approach introduced by L.~M.~Shi, H.~Fang, W.~Tong, J.~Wu, R.~Perkins, R.~M.~Blair, W.~S.~Branham, S.~L.~Dial, C.~L.~Moland, and D.~M.~Sheehan, \emph{J. Chem. Inf. Comput. Sci.} 2001, 41, 186--195.
+
+  \item \textbf{Q$^2_{\mathrm{F2}}$}: equivalent to the classical external coefficient of determination ($R^2_{\mathrm{ext}}$),
+  \[
+  Q^2_{\mathrm{F2}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{test}}\right)^2
+  }
+  \]
+  where the denominator corresponds to the variance of the external set with respect to its own mean. This definition matches the external validation coefficient formalized and analyzed by G.~Sch\"{u}rmann, R.~Ebert, J.~Chen, B.~Wang, and R.~K\"{u}hne, \emph{J. Chem. Inf. Model.} 2008, 48, 2140--2145.
+
+  \item \textbf{Q$^2_{\mathrm{F3}}$}: compares the external mean squared error (MSE) against the \emph{normalized variance of the training set},
+  \[
+  Q^2_{\mathrm{F3}}
+  =
+  1 -
+  \frac{
+  \displaystyle \frac{1}{n_{\mathrm{test}}}
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \displaystyle \frac{1}{n_{\mathrm{train}}}
+  \sum_{j=1}^{n_{\mathrm{train}}}
+  \left(y_j^{\mathrm{train}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the numerator is the external MSE and the denominator is the variance of the training responses normalized by the number of training observations. This formulation corresponds to the PRESS- and TSS-normalized external validation metric reported by V.~Consonni, D.~Ballabio, and R.~Todeschini, \emph{J. Chem. Inf. Model.} 2009, 49, 1669--1678.
+
+\end{itemize}
+
+Overall, Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ are implemented in MLR-X following these established external validation frameworks, with Q$^2_{\mathrm{F3}}$ explicitly using a training-variance--normalized form to improve numerical stability on small or low-variance external sets.
 
 \subsection{Summary and reports}
 \begin{itemize}
