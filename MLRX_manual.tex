@@ -295,7 +295,7 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item \textbf{Reduce}: prune one predictor at a time when the metric stays the same or improves.
   \item If two active predictors exceed the correlation threshold, drop the one with weaker contribution (or lower target correlation when needed) and refresh the remaining set.
   \item \textbf{Swap recovery}: revisit previously dropped variables when swap logs suggest a possible gain.
-  \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
+  \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and target metric cutoff, i.e., minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
 \end{enumerate}
 \medskip
 Runs are deterministic: identical datasets, configuration options, and seed lists produce the same model paths and exported results.
