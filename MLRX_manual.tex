@@ -195,7 +195,7 @@ Selecting \emph{None} keeps external validation available later from the Validat
   \begin{enumerate}[label=\arabic*.]
     \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is an original method in this software (doi.org/xxxxx).
     \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence; can be lengthy).
-    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; Minimum report R$^2$ uses the training-set R$^2$ as a gatekeeper even when optimizing alternative metrics.
+    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Target metric cutoff}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; the Target metric cutoff uses the training-set value of the selected objective as a gatekeeper even when optimizing alternative metrics.
     \item Target metric and covariance: select \emph{R$^2$}, \emph{adj-R$^2$}, or \emph{Q$^2$} as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3). Non-robust keeps the standard OLS covariance (assumes homoskedasticity). HC0 replaces constant error variance with squared residuals (White, 1980). HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations using $1/(1-h_i)$. HC3 uses $1/(1-h_i)^2$ for a jackknife-like correction, offering the strongest finite-sample protection against leverage.
     \item \emph{Clip predictions to}: set lower and/or upper bounds to constrain predicted values for scoring and exports.
   \end{enumerate}
@@ -398,10 +398,10 @@ Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with s
 \subsection{Configuration file structure}
 Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options can be selected by index using \texttt{selected option} inside the block. Section 13 includes a complete example configuration file.
 \subsection{Execution and progress}
-The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
+The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Target metric cutoff, filtered models kept after export limits, and CPU times.
 
 \subsection{Output}
-Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Minimum report R$^2$ filter, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
+Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Target metric cutoff, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
 The output path can be changed in the configuration file; by default the CLI writes \texttt{models.csv} to the current working directory.
 
 % =========================================================
@@ -410,7 +410,7 @@ The output path can be changed in the configuration file; by default the CLI wri
   \item Validate inputs before running: preview the CSV to confirm the delimiter, target column, non-variable columns, and exclusions. Apply the constant filter when near-constant predictors should be removed. If planning an external holdout, ensure identical headers, column order, and target definition across all files.
   \item Choose the search strategy deliberately: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. Prefer EPR-S for large or high-dimensional designs; reserve All Subsets for small datasets or confirmatory analyses.
   \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors; use the \emph{Recommended} button for automatic calculation. Increase this value if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility.
-  \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
+  \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust the \emph{Target metric cutoff} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
   \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0--1) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
   \item Align parallelization with available hardware: set \emph{Parallel jobs} according to available CPU capacity. Although the app normalizes this value, requesting fewer jobs can reduce contention on shared or heavily loaded machines.
   \item Validate comprehensively and interpret jointly: always run internal validation (LOO or k-fold) and, when available, external validation. Review the \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to assess model stability and reliability. Enable the recommended covariance option in the Summary tab when statistical inference is required.
@@ -430,7 +430,7 @@ The output path can be changed in the configuration file; by default the CLI wri
   \item \textbf{Significance level}: threshold for coefficient inclusion during model refinement.
   \item \textbf{Correlation threshold}: maximum tolerated pairwise correlation before pruning to control redundancy.
   \item \textbf{VIF threshold}: veto for models with multicollinearity above the specified variance inflation factor.
-  \item \textbf{Minimum report R$^2$}: training R$^2$ cutoff applied before metrics are compared with the optimization target.
+  \item \textbf{Target metric cutoff}: training-set threshold applied before metrics are compared with the optimization target.
   \item \textbf{Top models to report}: limit on retained models; aligned with the CSV export limit.
   \item \textbf{Target metric}: optimization objective (R$^2$, adjusted R$^2$, or Q$^2$).
   \item \textbf{Covariance estimator}: robust or non-robust variance choice for standard errors and inference.
@@ -457,7 +457,7 @@ The output path can be changed in the configuration file; by default the CLI wri
 \begin{itemize}
   \item \textbf{The GUI does not open}: download the corresponding package again and ensure the binary is not blocked by antivirus.
   \item \textbf{CSV does not load}: verify path, permissions, and delimiter; use \emph{Preview data}.
-  \item \textbf{No models exported}: review \emph{Minimum report R$^2$} and \emph{VIF threshold}.
+  \item \textbf{No models exported}: review the \emph{Target metric cutoff} and \emph{VIF threshold}.
   \item \textbf{External validation fails}: the target column must match and the CSV must contain the same predictors.
   \item \textbf{Empty plot or missing labels}: select a valid model/dataset or load a results file.
   \item \textbf{Unexpected CPU usage}: check \emph{Parallel jobs}; the system normalizes the value to at least 1 and reports adjustments.
