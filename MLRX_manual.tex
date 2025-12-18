@@ -19,6 +19,7 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{listings}
+\graphicspath{{./}}
 
 % ==== Styles ====
 \hypersetup{
@@ -27,7 +28,7 @@
   urlcolor=blue!50!black,
   citecolor=blue!50!black,
   pdfauthor={Jackson J. Alcázar},
-  pdftitle={User Guide and Technical Reference -- MLR-X 1.0},
+  pdftitle={User Guide -- MLR-X 1.0},
   pdfcreator={MLR-X}
 }
 
@@ -42,152 +43,218 @@
 \setlist{nosep,leftmargin=2.1em}
 \onehalfspacing
 
-\title{\vspace{-1.2cm}\textbf{MLR-X 1.0}\\User Guide and Technical Reference}
-\author{Jackson J. Alcázar\\MLR-X Project}
-\date{\today}
-
 \begin{document}
-\maketitle
+\begin{titlepage}
+  \centering
+  \vspace*{1cm}
+  {\fontsize{50}{60}\textbf{MLR-X 1.0}\par}
+  \vspace{0.8cm}
+  {\Large A Scalable Software for Multiple Linear Regression on Small and Large Datasets\par}
+  \vspace{1.5cm}
+  {\LARGE \textbf{User Guide}\par}
+  \vspace{0.15cm}
+  {\large Version 1.0.0\par}
+  \vspace{1.5cm}
+  \includegraphics[width=4.2cm]{Icon.png}\par
+  {\normalsize Homepage:\par \url{https://jacksonalcazar.github.io/MLR-X}\par}
+  \vspace{2.5cm}
+  {\large \textbf{Jackson J. Alcázar}\par}
+  \vspace{0.2cm}
+  {\normalsize jjalcazar.dev@gmail.com\par}
+  \vfill {\normalsize Santiago, Chile.\par}
+\end{titlepage}
 
 \begin{center}
-\textit{This document describes the operational use of the MLR-X desktop application for data preparation, multiple linear regression (MLR) model search, validation, diagnostics, visualization, reporting, and command-line (CLI) automation.}
+\textit{This document describes the operational use of the MLR-X desktop application for data preparation, multiple linear regression (MLR) model search, validation, diagnostics, visualization, reporting, and command-line automation.}
 \end{center}
 
 \tableofcontents
 \newpage
 
 % =========================================================
-\section{Identity and scope}
+\section{Overview}
+MLR-X is a cross-platform application for designing, fitting, and assessing multiple linear regression models on datasets that range from small matrices to high-dimensional tables. The software combines a graphical interface with optional CLI execution, supports both heuristic and exhaustive model searches, and delivers synchronized validation, diagnostics, visualization, and reporting outputs in portable CSV and document formats.
+
+% =========================================================
+\section{Distribution Packages}
+Packages are portable and do not require external Python installations or scientific libraries.
+
+\subsection{Platform Support}
 \begin{itemize}
-  \item \textbf{Name and version}: MLR-X (version 1.0).
-  \item \textbf{License}: GNU Affero General Public License v3.0 (AGPL-3.0) with 2025 rights held by Jackson J. Alcázar. Windows build metadata mirrors this information.
-  \item \textbf{Audience}: users who need to fit, validate, and diagnose multiple linear regression models on small or large datasets.
-  \item \textbf{Official channels}:\\
-  \textbf{Repository}: \url{https://github.com/Jacksonalcazar/MLR-X}\\
-  \textbf{Homepage}: \url{jacksonalcazar.github.io/MLR-X}
+  \item \textbf{Linux}: Single binary executable
+  \item \textbf{macOS}: Application bundles (.app)
+  \item \textbf{Windows}: Portable executables (.exe)
 \end{itemize}
 
-\subsection{Distributions and compatibility}
+\subsection{Interface Variants}
+
+\subsubsection{GUI-Only Versions}
 \begin{itemize}
-  \item \textbf{Available builds}: self-contained binaries for Linux, macOS (GUI and GUI+CLI), Windows GUI, and Windows GUI+CLI.
-  \item \textbf{System requirements}: 64-bit Windows, Linux, or macOS. No Python installation or scientific libraries are required; everything ships within the build.
-  \item \textbf{Console version}: available in the CLI-enabled builds (Linux, macOS GUI+CLI, and Windows GUI+CLI) to run the full pipeline without the GUI by supplying a \texttt{config.conf} file.
+  \item Launch only the graphical user interface
+  \item No terminal/console window displayed
+  \item Available for: macOS (.app), Windows (.exe)
 \end{itemize}
+
+\subsubsection{GUI+CLI Versions}
+\begin{itemize}
+  \item Launch both graphical interface AND terminal/console
+  \item Allow simultaneous GUI and command-line interaction
+  \item Terminal remains open for CLI commands alongside GUI
+  \item Available for: macOS (.app), Windows (.exe)
+\end{itemize}
+
+\subsubsection{Linux Behavior}
+\begin{itemize}
+  \item Single binary supports both modes
+  \item GUI-only interface by default
+  \item CLI accessible via command-line arguments
+  \item No separate GUI+CLI variant needed
+\end{itemize}
+
+\medskip
+CLI-enabled platforms allow running the full pipeline without the GUI by supplying a \texttt{config.conf} file.
 
 % =========================================================
 \section{Requirements and installation}
-The distributed builds are self-contained downloads and do not require installers or shortcut generators. Place each executable in your preferred folder. Optionally, add that folder to your system \texttt{PATH} so you can launch \verb|MLR-X| from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate build and follow these steps:
+The distributed packages are self-contained downloads and do not require installers or shortcut generators. Place each executable in a preferred folder. Optionally, add that folder to the system \texttt{PATH} so \verb|MLR-X| can launch from any directory (e.g., \verb|export PATH=/opt/MLRX:$PATH| on Linux or configuring environment variables on Windows). Choose the appropriate package and follow these steps:
 
-\subsection{Setting up the portable builds}
+Supported platforms and architectures:
 \begin{itemize}
-  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed (\texttt{chmod +x MLR-X}). To add it to your \texttt{PATH}, prepend the folder with \verb|export PATH=/path/to/folder:$PATH| or the equivalent shell profile setting. To register a desktop launcher:
-        \begin{enumerate}[label=\arabic*.]
-          \item Build the Linux executable (see the steps above), then copy the binary and the icon to a stable location, for example:
-          \item \texttt{sudo mkdir -p /opt/MLRX}
-          \item \texttt{sudo cp MLRX /opt/MLRX/}\\
-                \texttt{sudo cp icon/icon.ico /opt/MLRX/}
-          \item Update the \texttt{Exec} and \texttt{Icon} paths in \texttt{MLRX.desktop} if you choose a different installation directory.
-          \item Install the launcher by copying it to your applications directory and mark the file as executable:
-          \item \texttt{chmod +x MLRX.desktop}
-          \item \texttt{cp MLRX.desktop ~/.local/share/applications/}
-          \item \# or for all users:\\
-                \texttt{\# sudo cp MLRX.desktop /usr/share/applications/}
-          \item Refresh the desktop launcher database (optional but recommended):
-          \item \texttt{update-desktop-database ~/.local/share/applications}\\
-                \texttt{\# or sudo update-desktop-database /usr/share/applications}
-        \end{enumerate}
-  \item \textbf{Windows GUI}: download the GUI build, place \texttt{MLR-X.exe} in a convenient folder, and run it directly.
+  \item Windows 10/11 (64-bit)
+  \item macOS X (Arm64)
+  \item Ubuntu 20.04 (x86-64)
+\end{itemize}
+
+\subsection{Setting up the portable packages}
+\begin{itemize}
+  \item \textbf{Linux}: download the binary, move it to a stable folder, and mark it as executable if needed.
+
+  \begin{enumerate}[label=\arabic*.]
+    \item Create a stable installation directory and copy the executable (and icon, if desired).
+\begin{lstlisting}[style=mlrx]
+sudo mkdir -p /opt/MLRX
+sudo cp MLRX /opt/MLRX/
+sudo chmod +x /opt/MLRX/MLRX
+
+sudo mkdir -p /opt/MLRX/icon
+sudo cp icon/icon.ico /opt/MLRX/
+\end{lstlisting}
+
+    \item Optionally add the installation directory to the \texttt{PATH} (recommended for CLI usage).
+\begin{lstlisting}[style=mlrx]
+# For the current session
+export PATH=/opt/MLRX:$PATH
+
+# To persist (choose one, depending on your shell)
+echo 'export PATH=/opt/MLRX:$PATH' >> ~/.bashrc
+# or
+echo 'export PATH=/opt/MLRX:$PATH' >> ~/.zshrc
+\end{lstlisting}
+
+    \item (Optional) Register a desktop launcher (GNOME/KDE). If the package includes \texttt{MLRX.desktop}, update its \texttt{Exec} and \texttt{Icon} fields to match the installation paths, then install it.
+\begin{lstlisting}[style=mlrx]
+chmod +x MLRX.desktop
+cp MLRX.desktop ~/.local/share/applications/
+\end{lstlisting}
+
+    \item (Optional) Refresh the application database (only if the command is available on the distribution).
+\begin{lstlisting}[style=mlrx]
+update-desktop-database ~/.local/share/applications 2>/dev/null || true
+\end{lstlisting}
+  \end{enumerate}
+  \item \textbf{Windows GUI}: download the GUI package, place \texttt{MLRX.exe} in a convenient folder, and run it directly.
   \item \textbf{Windows GUI+CLI}: same as Windows GUI, with the Run CLI option enabled.
-  \item \textbf{macOS GUI}: download the app bundle and run it from your preferred location (e.g., move it to \texttt{/Applications} if desired).
+  \item \textbf{macOS GUI}: download the app bundle and run it from a preferred location (e.g., move it to \texttt{/Applications} if desired).
   \item \textbf{macOS GUI+CLI}: same as macOS GUI, with the Run CLI option enabled.
 \end{itemize}
 
-\section{Interface tour (GUI)}
-MLR-X organizes its features into tabs within a main window.
+\section{Interface (GUI) tour}
+The main window presents a tabbed workflow.
 
 \subsection{\textbf{Setup \& Run} tab}
+Organizes dataset loading, splitting, model-search settings, and run controls. A banner at the top of this tab tracks the active task and its progress, while the lower status bar mirrors the current action. Tabs become available automatically once their prerequisites are filled in.
 \paragraph{Dataset}
 \begin{enumerate}[label=\arabic*.]
-  \item Select the CSV (or use \emph{Browse}).
-  \item Define the delimiter (\verb|;| by default), the dependent variable, and non-predictor columns.
-  \item Exclude observations by ID or range (e.g., \texttt{3,9,4-8}).
-  \item Enable \emph{Exclude nearly constant predictors} and set the percentage threshold.
-  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the top-right corner of the frame; the task name appears in the bottom-right corner.
+  \item Choose the CSV via the field or \emph{Browse} button.
+  \item Set the delimiter (\verb|;| by default), target (dependent variable), and any non-predictor columns.
+  \item Optionally exclude observations by ID or ranges (e.g., \texttt{3,9,4-8}).
+  \item Enable \emph{Exclude nearly constant predictors} and provide the percentage threshold to drop near-zero-variance variables.
+  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the top-right corner; the active task shows in the lower-right footer.
 \end{enumerate}
 
 \paragraph{Data splitting}
 Choose how to partition the dataset for training and testing.
 \begin{itemize}
-  \item \textbf{None}: use the full dataset.
-  \item \textbf{Random}: specify \emph{Test size (\%)}.
-  \item \textbf{Manual}: lists or ranges for train/test without overlap.
+  \item \emph{None}: use the full dataset.
+  \item \emph{Random}: specify \emph{Test size (\%)}.
+  \item \emph{Manual}: provide train/test lists or ranges without overlap.
 \end{itemize}
-If you select \textbf{None} (full dataset), you can still perform external validation later in the \textbf{Validation} tab by loading an external file.
+Selecting \emph{None} keeps external validation available later from the Validation tab by loading a separate file.
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
-   \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is a new, original method implemented in this software (doi.org/xxxxx).
-   \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are the independent starting points used to explore model combinations. Recommendation buttons help populate these values. Set iterations/seed can run in \textit{auto} (estimate and apply the maximum per seed automatically), \textit{manual} (requires max iterations per seed), or \textit{converge (run until convergence)}, and this last option may take a long time.
-  \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Minimum report R$^2$}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the number of best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Correlation threshold and Variance Inflation Factor (VIF) threshold control multicollinearity pruning. Minimum report R$^2$ uses the training-set R$^2$ as a gatekeeper even when optimizing alternative metrics.
-  \item The \emph{target metric} (R$^2$, adj-R$^2$, or Q$^2$) sets the scoring objective for model evaluation, while the \emph{covariance type} (Non-robust, HC0--HC3) selects the heteroskedasticity-consistent variance estimator for reliable inference. Non-robust maintains the standard OLS covariance matrix, valid only under homoskedasticity. HC0 implements the classic White (1980) estimator, replacing the constant error variance with squared residuals. HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations through the diagonal of the hat matrix ($h_i$), using the weighting factor $1/(1-h_i)$. HC3 applies the most conservative leverage adjustment with weighting factor $1/(1-h_i)^2$, approximating the jackknife estimator and providing maximum protection against influential observations. The progression from HC0 to HC3 represents increasing robustness to both heteroskedasticity and leverage points in finite samples.
-   \item \emph{Clip predictions to}: define lower and/or upper bounds to constrain predicted values for scoring and exports.
+    \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is an original method in this software (doi.org/xxxxx).
+    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence; can be lengthy).
+    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Target metric cutoff}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; the Target metric cutoff uses the training-set value of the selected objective as a gatekeeper even when optimizing alternative metrics.
+    \item Target metric and covariance: select \emph{R$^2$}, \emph{adj-R$^2$}, \emph{Q$^2$}, or \emph{RMSE (LOO)} as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3). Non-robust keeps the standard OLS covariance (assumes homoskedasticity). HC0 replaces constant error variance with squared residuals (White, 1980). HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations using $1/(1-h_i)$. HC3 uses $1/(1-h_i)^2$ for a jackknife-like correction, offering the strongest finite-sample protection against leverage.
+    \item \emph{Clip predictions to}: set lower and/or upper bounds to constrain predicted values for scoring and exports.
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Displays three synchronized tables summarizing training, internal validation, and external validation results. The upper panel allows loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), selecting the sorting criterion, and filtering models by predictors.
+Displays three synchronized tables for training, internal validation, and external validation. The header controls allow loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), picking the sorting criterion, and filtering models by predictors.
 \begin{itemize}
-  \item \textbf{Top models training}: shows each model together with its predictor set, number of predictors (N pred), goodness-of-fit statistics (R$^2$, adjusted R$^2$, RMSE, MAE, and $s$), and multicollinearity indicators (maximum and average VIF).
-  \item \textbf{Top models internal validation (CV)}: reports the corresponding LOO and k-fold performance metrics, including Q$^2$, RMSE, MAE, and $s$ for each procedure.
-  \item \textbf{Top models external validation}: presents the external prediction results using Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$ (R$^2_{\mathrm{ext}}$), Q$^2_{\mathrm{F3}}$, and the external RMSE and MAE values.
+  \item \textbf{Top models training}: predictor set, predictor count (N pred), goodness-of-fit (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity (maximum/average VIF).
+  \item \textbf{Top models internal validation (CV)}: LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$).
+  \item \textbf{Top models external validation}: external prediction metrics Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
 \end{itemize}
-All three tables refresh automatically and remain synchronized with the Validation, Diagnostics, Visualization, and Summary tabs, which become available as soon as a model set is generated when the run analysis is completed or when model results are loaded.
+All three tables update automatically and stay synchronized with the Validation, Diagnostics, Visualization, and Summary tabs once a model set exists (after a run or when loading saved results).
 
 \subsection{\textbf{Validation} tab}
-Use this tab to configure cross-validation and external validation for the selected models.
+Configures cross-validation and external validation for the chosen models.
 \begin{itemize}
   \item Model selection: \emph{Top}, \emph{Multiple} (range like \texttt{1-5,7,9}), or \emph{All}.
-  \item \textbf{LOO and k-fold}: internal validation with \emph{Leave One Out (LOO)} and/or \emph{Folds} and \emph{Repeats}.
-  \item \textbf{External validation}: select file and delimiter; requires the same target column as the training set.
+  \item LOO and k-fold: internal validation with \emph{Leave One Out (LOO)} and/or \emph{Folds} plus \emph{Repeats}.
+  \item External validation: choose file and delimiter; requires the same target column as the training set.
 \end{itemize}
-Validation results are automatically appended to the Models tab tables when each process completes.
+Validation outputs append automatically to the Models tab when finished.
 
 \subsection{\textbf{Diagnostics} tab}
-Provides per-observation diagnostics for the selected model and the corresponding correlation matrix.
+Provides per-observation diagnostics and the correlation matrix for the active model.
 \begin{itemize}
-  \item Model selector with a status message for availability, plus a dataset filter to display \emph{Training only}, \emph{Training and testing}, or \emph{Testing only}; the holdout status propagates automatically.
-  \item Observation diagnostics table showing \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
-  \item \emph{Export CSV} exports the currently visible observation diagnostics using the active dataset filter.
-  \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export for the displayed matrix.
+  \item Model selector with status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); holdout status propagates automatically.
+  \item Observation diagnostics table with \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
+  \item \emph{Export CSV} saves the currently visible diagnostics using the active dataset filter.
+  \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export.
 \end{itemize}
 
 \subsection{\textbf{Visualization} tab}
 \begin{itemize}
-  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization analysis runs per model and can insert its charts into the plot list once computed.
+  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization runs per model and can insert charts into the plot list when complete.
   \item Chart list: correlation heatmaps (with or without the dependent variable), Predicted vs Actual (standard and by LOO), residuals vs actual/predictions (standard and by LOO), Scale--Location (standard and by LOO), QQ residuals (standard and by LOO), residual distribution (standard and by LOO), Williams plot (standard and by LOO), Cook's distance vs leverage (standard and by LOO), leverage plot, and Predicted vs Leverage.
-  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or an auto-detected extra column), identity line (for predicted vs actual and QQ residual plots), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axis ranges.
+  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or auto-detected extra column), identity line (Predicted vs Actual and QQ residuals), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axes.
   \item Marker customization: separate color and marker-style pickers for training and testing points, plus marker size control; heatmaps disable incompatible controls automatically.
-  \item Axes and export: manual limits for X/Y, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
+  \item Axes and export: manual X/Y limits, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
 \end{itemize}
 
 \subsection{\textbf{Summary} tab}
 \begin{itemize}
-  \item Model selector with availability status plus a \emph{Use recommended covariance} toggle (applies BP/White and leverage diagnostics before switching to the suggested estimator) and \emph{Export Summary...} to save the full text dossier. A scrollable text pane renders the summary for the current model.
-  \item Overview section: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
-  \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and reason/notes that triggered the robust choice.
+  \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator) and \emph{Export Summary...} to save the full text dossier. A scrollable pane renders the current model summary.
+  \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
+  \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and notes that triggered the robust choice.
   \item Coefficients and equation: coefficient table with standard errors, $t$, $p$, and confidence intervals; equations rendered with and without errors.
-  \item Metrics tables: grouped training metrics (R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF max/avg, $|r|_{\max}$), internal validation (LOO and k-fold blocks with repeat note), and external validation (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$/R$^2_{\mathrm{ext}}$, Q$^2_{\mathrm{F3}}$, RMSE, MAE).
+  \item Metrics: training block (R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF max/avg, $|r|_{\max}$), internal validation (LOO and k-fold with repeat note), and external validation (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, MAE).
 \end{itemize}
 
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
 \begin{itemize}
-  \item Dataset and results inputs: browse/load the CSV and an optional results file (unlocks model-based options) with a status line indicating readiness.
-  \item Variable scope and axes: pick \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches the plot mode, with bin controls for a fixed number of bins or custom breakpoints.
-  \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model context is active), aspect ratio presets (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog to set axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
-  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution by default). \emph{Create filtered dataset} builds a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range, warning about any missing models in the requested range.
+  \item Inputs: browse/load the CSV and an optional results file (unlocks model-aware options) with a readiness status line.
+  \item Variable scope and axes: choose \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches to histogram mode with fixed-bin or custom-breakpoint controls.
+  \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model is active), aspect ratios (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog for axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
+  \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution). \emph{Create filtered dataset} creates a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range; the app warns about missing models in the requested range.
 \end{itemize}
 
 \subsection{\textbf{Help} tab}
-Summarizes product information and support links for the application. The About panel shows the MLR-X name, version, license notice, and tagline. Quick links open the homepage and contact email, and buttons provide access to the bundled manual, citation dialog, bug-report form, and donation page.
+Summarizes product information and support links. The About panel shows the MLR-X name, version, license notice, and tagline. Quick links open the homepage and contact email, and buttons provide the bundled manual, citation dialog, bug-report form, and donation page.
 
 % =========================================================
 \section{Analysis flow and process handling}
@@ -199,22 +266,22 @@ Summarizes product information and support links for the application. The About 
 
 \subsection{Starting a run}
 \begin{enumerate}
-  \item Click \emph{Run analysis}. The app validates the configuration, reloads the dataset (including the split), and prepares the selected output file.
-  \item The status switches to \emph{Running}, the \emph{Run analysis} button is disabled, \emph{Cancel} is enabled, and previous results, caches, and downstream tabs (Validation, Summary, Diagnostics, Visualization, Desktop) are reset.
-  \item A run header plus ``Starting analysis...'' is appended to the log; the progress bar and step counter are reset for the search and post-processing stages.
+  \item Click Run analysis. The app validates the configuration, reloads the dataset (including the split) and prepares the selected output file.
+  \item The status switches to Running, and previous results, caches, and downstream tabs (Validation, Summary, Diagnostics, Visualization, Desktop) are reset.
+  \item The progress bar and step counter are reset for the search and post-processing stages.
 \end{enumerate}
 
 \subsection{Progress and cancellation}
 \begin{itemize}
-  \item The progress bar tracks completion across stages, and the \emph{Log} shows model counts, filters, CPU times, and other events in real time.
-  \item \emph{Cancel} changes the status to \emph{Cancelling...}, disables the \emph{Cancel} button, signals all workers to stop, and records the request in the log. Errors raise a dialog, set status to \emph{Error}, and keep the run controls enabled for a new attempt.
+  \item The progress bar summarizes each stage, and the \emph{Log} lists model counts and timing as they occur.
+  \item \emph{Cancel} stops workers, marks the status as \emph{Cancelling...}, and notes the request in the log. Errors set status to \emph{Error} and leave the run controls ready for another try.
 \end{itemize}
 
 \subsection{Completion and outputs}
 \begin{enumerate}
   \item When finished, the status becomes \emph{Completed}; \emph{Run analysis} re-enables and \emph{Cancel} disables. Validation, Diagnostics, Visualization, and Summary tabs are unlocked with the new results, and any external holdout is refreshed if available.
   \item Results load automatically into the tables, summary pane, and downstream tabs, and the CSV is written to the confirmed path (\texttt{models.csv} by default). The header line embeds run metadata as JSON between \verb|#EPRS-S ... ;#|, and the most recent export path is remembered for the next session.
-  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and notifies you with an information dialog.
+  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and shows an information dialog.
 \end{enumerate}
 
 % =========================================================
@@ -226,31 +293,84 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item \textbf{Expand}: add the single predictor that most improves the metric without violating the maximum predictors.
   \item \textbf{Perturb}: perform one-for-one swaps (drop one, add one) to escape local optima.
   \item \textbf{Reduce}: prune one predictor at a time when the metric stays the same or improves.
-  \item \textbf{Correlation clean-up}: if two active predictors exceed the correlation threshold, drop the one with weaker contribution (or lower target correlation when needed) and refresh the remaining set.
+  \item If two active predictors exceed the correlation threshold, drop the one with weaker contribution (or lower target correlation when needed) and refresh the remaining set.
   \item \textbf{Swap recovery}: revisit previously dropped variables when swap logs suggest a possible gain.
-  \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
+  \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and target metric cutoff, i.e., minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
 \end{enumerate}
+\medskip
+Runs are deterministic: identical datasets, configuration options, and seed lists produce the same model paths and exported results.
+\medskip
+EPR-S is an original method in this software (doi.org/xxxxx).
 
 \subsection{All subsets (exhaustive)}
 Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small (practical below roughly 25 variables) because the number of combinations grows quickly.
-
-\subsection{Engine good practices}
-\begin{itemize}
-  \item Seeds: at least as many as predictors; use \emph{Recommended} to auto-populate sensible values.
-  \item Seed size: about half of \emph{Max predictors} balances exploration and feasibility.
-  \item VIF threshold: keep it $<5$ to curb multicollinearity; tune correlation threshold between 0 and 1 alongside the chosen significance level.
-  \item Prefer EPR-S for large predictor spaces; reserve all subsets for small designs or confirmatory sweeps.
-\end{itemize}
 
 % =========================================================
 \section{Result format and exports}
 \subsection{Model CSV}
 \begin{itemize}
   \item Semicolon-separated file with columns for model ID, predictors, predictor count, training metrics (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity indicators (maximum and average VIF).
-  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2$F1, Q$^2$F2 (external R$^2$), Q$^2$F3, RMSE, $s$, and MAE.
-  \item The first row stores a serialized metadata block (dataset path, delimiter, dependent/ignored columns, constant-filter threshold, exclusions, target metric, search method, covariance type, iteration mode, split configuration, clipping limits, k-fold settings, validation file/delimiter, export limit, models found/explored/reported, and CPU times) so the UI can reload the configuration accurately.
+  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, $s$, and MAE.
+  \item Serialized metadata (dataset path, delimiter, dependent/ignored columns, constant-filter threshold, exclusions, target metric, search method, covariance type, iteration mode, split configuration, clipping limits, k-fold settings, validation file/delimiter, export limit, models found/explored/reported, and CPU times) lets the UI reload the configuration accurately.
   \item \emph{Export limit} caps the number of rows written; the exported table follows the training-order sort and mirrors the Models tab, including validation tables when available.
 \end{itemize}
+
+\subsubsection{External validation metrics (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$)}
+
+External validation metrics are computed on the external (test) set using the sum of squared prediction errors (SSE) and follow established QSAR conventions, differing in the choice of reference variance used for normalization.
+
+\begin{itemize}
+
+  \item \textbf{Q$^2_{\mathrm{F1}}$}: computed as
+  \[
+  Q^2_{\mathrm{F1}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the denominator represents the variance of the external responses measured relative to the \emph{training-set mean}. This formulation evaluates external predictivity using the training calibration reference and penalizes deviations from the mean value learned during model fitting, consistent with the external validation approach introduced by L.~M.~Shi, H.~Fang, W.~Tong, J.~Wu, R.~Perkins, R.~M.~Blair, W.~S.~Branham, S.~L.~Dial, C.~L.~Moland, and D.~M.~Sheehan, \emph{J. Chem. Inf. Comput. Sci.} 2001, 41, 186--195.
+
+  \item \textbf{Q$^2_{\mathrm{F2}}$}: equivalent to the classical external coefficient of determination ($R^2_{\mathrm{ext}}$),
+  \[
+  Q^2_{\mathrm{F2}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{test}}\right)^2
+  }
+  \]
+  where the denominator corresponds to the variance of the external set with respect to its own mean. This definition matches the external validation coefficient formalized and analyzed by G.~Sch\"{u}rmann, R.~Ebert, J.~Chen, B.~Wang, and R.~K\"{u}hne, \emph{J. Chem. Inf. Model.} 2008, 48, 2140--2145.
+
+  \item \textbf{Q$^2_{\mathrm{F3}}$}: compares the external mean squared error (MSE) against the \emph{normalized variance of the training set},
+  \[
+  Q^2_{\mathrm{F3}}
+  =
+  1 -
+  \frac{
+  \displaystyle \frac{1}{n_{\mathrm{test}}}
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \displaystyle \frac{1}{n_{\mathrm{train}}}
+  \sum_{j=1}^{n_{\mathrm{train}}}
+  \left(y_j^{\mathrm{train}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the numerator is the external MSE and the denominator is the variance of the training responses normalized by the number of training observations. This formulation corresponds to the PRESS- and TSS-normalized external validation metric reported by V.~Consonni, D.~Ballabio, and R.~Todeschini, \emph{J. Chem. Inf. Model.} 2009, 49, 1669--1678.
+
+\end{itemize}
+
+Overall, Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ are implemented in MLR-X following these established external validation frameworks, with Q$^2_{\mathrm{F3}}$ explicitly using a training-variance--normalized form to improve numerical stability on small or low-variance external sets.
 
 \subsection{Summary and reports}
 \begin{itemize}
@@ -261,7 +381,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 
 % =========================================================
 \section{Command-line (CLI) usage}
-Available in the Linux, macOS GUI+CLI, and Windows GUI+CLI builds to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
+Available on Linux and on the macOS and Windows GUI+CLI packages to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
 
 \subsection{Invocation}
 \begin{lstlisting}[style=mlrx]
@@ -270,37 +390,74 @@ Available in the Linux, macOS GUI+CLI, and Windows GUI+CLI builds to run the ful
 # macOS GUI+CLI
 ./MLRX config.conf or ./MLRX path/to/config.conf
 # Windows GUI+CLI
-MLRX.exe config.conf or MLRX.exe path/to/config.conf
+MLRX.exe config.conf or MLRX.exe path\to\config.conf
 \end{lstlisting}
 If additional arguments are supplied, the program shows the expected syntax and exits.
+Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"}).
 
 \subsection{Configuration file structure}
-Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options let you select by index using \texttt{selected option: <n>} inside the block (for example, to pick a delimiter or target metric).
+Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options can be selected by index using \texttt{selected option} inside the block. Section 13 includes a complete example configuration file.
 \subsection{Execution and progress}
-The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Minimum report R$^2$ threshold, filtered models kept after export limits, and CPU times.
+The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs), normalizes excessive parallel job requests, and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Target metric cutoff, filtered models kept after export limits, and CPU times.
 
 \subsection{Output}
-Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Minimum report R$^2$ filter, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
+Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Target metric cutoff, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
+The output path can be changed in the configuration file; by default the CLI writes \texttt{models.csv} to the current working directory.
 
 % =========================================================
 \section{Operational good practices}
 \begin{itemize}
-  \item Validate inputs before running: preview the CSV to confirm delimiter, target, non-variable columns, and exclusions; apply the constant filter when near-constant predictors should be removed. If you plan an external holdout, keep identical headers, order, and target column across files.
-  \item Choose the search method deliberately: use EPR-S when you need faster exploration guided by seeds, or All subsets when you want exhaustive coverage but can tolerate longer runtimes.
-  \item Let the app prefill EPR-S values with the recommendation buttons, then adjust \emph{Minimum report R$^2$} and the \emph{Export limit} (default 5000) to manage how many models are kept and written.
-  \item Tune statistical thresholds before running: set \emph{Significance level} to control predictor inclusion, and set the \emph{Correlation threshold} and \emph{Variance Inflation Factor (VIF) threshold} to prune multicollinearity; revisit these if too many or too few models survive.
-  \item Set \emph{Parallel jobs} in line with your CPU; the app normalizes this value, but requesting fewer jobs avoids contention on busy machines.
-  \item Always run internal (LOO/k-fold) and, when available, external validation, then inspect \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to confirm stability. Use the recommended covariance toggle in Summary when inference is needed.
-  \item Use \emph{Clip predictions to} only when the response has known bounds, keeping the limits consistent with training data units.
-  \item Save the generated models CSVs and configuration files so future GUI or CLI sessions can reload the exact run context from the embedded metadata.
+  \item Validate inputs before running: preview the CSV to confirm the delimiter, target column, non-variable columns, and exclusions. Apply the constant filter when near-constant predictors should be removed. If planning an external holdout, ensure identical headers, column order, and target definition across all files.
+  \item Choose the search strategy deliberately: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. Prefer EPR-S for large or high-dimensional designs; reserve All Subsets for small datasets or confirmatory analyses.
+  \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors; use the \emph{Recommended} button for automatic calculation. Increase this value if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility.
+  \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust the \emph{Target metric cutoff} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
+  \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0--1) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
+  \item Align parallelization with available hardware: set \emph{Parallel jobs} according to available CPU capacity. Although the app normalizes this value, requesting fewer jobs can reduce contention on shared or heavily loaded machines.
+  \item Validate comprehensively and interpret jointly: always run internal validation (LOO or k-fold) and, when available, external validation. Review the \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to assess model stability and reliability. Enable the recommended covariance option in the Summary tab when statistical inference is required.
+  \item Apply prediction clipping cautiously: use \emph{Clip predictions} only when the response variable has known physical or theoretical bounds, and ensure limits are consistent with the units and range of the training data.
+  \item Preserve reproducibility: save all generated model CSVs and configuration files. These contain embedded metadata that allow future GUI or CLI sessions to reload and reproduce the exact run context.
+\end{itemize}
+
+% =========================================================
+\section{Parameter and chart reference}
+
+\subsection{Key configuration parameters}
+\begin{itemize}
+  \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models.
+  \item \textbf{Seed size}: sets the initial predictor count per seed; values near half the predictor limit balance exploration and computation.
+  \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, manual, or convergence modes.
+  \item \textbf{Max predictors per model}: upper bound on predictors allowed in any candidate model.
+  \item \textbf{Significance level}: threshold for coefficient inclusion during model refinement.
+  \item \textbf{Correlation threshold}: maximum tolerated pairwise correlation before pruning to control redundancy.
+  \item \textbf{VIF threshold}: veto for models with multicollinearity above the specified variance inflation factor.
+  \item \textbf{Target metric cutoff}: training-set threshold applied before metrics are compared with the optimization target.
+  \item \textbf{Top models to report}: limit on retained models; aligned with the CSV export limit.
+  \item \textbf{Target metric}: optimization objective (R$^2$, adjusted R$^2$, Q$^2$, or RMSE (LOO)).
+  \item \textbf{Covariance estimator}: robust or non-robust variance choice for standard errors and inference.
+  \item \textbf{Clip predictions}: lower/upper bounds used when predictions must respect known limits.
+  \item \textbf{Parallel jobs}: requested worker count for parallel tasks, normalized to available CPU cores.
+\end{itemize}
+
+\subsection{Interpreting key charts}
+\begin{itemize}
+  \item \textbf{Correlation heatmaps}: visualize pairwise predictor relationships; dark blocks expose multicollinearity risks.
+  \item \textbf{Predicted vs Actual}: alignment with the identity line indicates accurate calibration; systematic deviations flag bias.
+  \item \textbf{Residuals vs Predicted/Actual}: random scatter suggests homoskedasticity and linearity; structure signals misspecification.
+  \item \textbf{Scale--Location}: spreads residuals against fitted values to reveal variance patterns; flattening curves indicate stable variance.
+  \item \textbf{Residual distribution}: histogram or density of residuals to spot asymmetry, heavy tails, or outliers relative to a centered, bell-shaped pattern.
+  \item \textbf{QQ residuals}: departures from the diagonal highlight non-normal residual distributions.
+  \item \textbf{Leverage plot}: leverage values across observations reveal influential points relative to the threshold.
+  \item \textbf{Cook's distance vs leverage}: high distances at elevated leverage identify observations with strong influence on estimates.
+  \item \textbf{Williams plot}: combines leverage and standardized residuals to spot influential observations beyond leverage and residual cutoffs.
+  \item \textbf{Predicted vs Leverage}: blends fitted values with leverage to isolate influence patterns across the prediction range.
 \end{itemize}
 
 % =========================================================
 \section{Troubleshooting and FAQ}
 \begin{itemize}
-  \item \textbf{The GUI does not open}: download the corresponding build again and ensure the binary is not blocked by antivirus.
+  \item \textbf{The GUI does not open}: download the corresponding package again and ensure the binary is not blocked by antivirus.
   \item \textbf{CSV does not load}: verify path, permissions, and delimiter; use \emph{Preview data}.
-  \item \textbf{No models exported}: review \emph{Minimum report R$^2$} and \emph{VIF threshold}.
+  \item \textbf{No models exported}: review the \emph{Target metric cutoff} and \emph{VIF threshold}.
   \item \textbf{External validation fails}: the target column must match and the CSV must contain the same predictors.
   \item \textbf{Empty plot or missing labels}: select a valid model/dataset or load a results file.
   \item \textbf{Unexpected CPU usage}: check \emph{Parallel jobs}; the system normalizes the value to at least 1 and reports adjustments.
@@ -308,12 +465,108 @@ Results are exported to the specified CSV with semicolon separation, normalized 
 Report any persisting issues or bugs at \url{https://github.com/Jacksonalcazar/MLR-X/issues} so they can be addressed promptly.
 
 % =========================================================
-\section{Credits, license, and citation}
+\section{License, credits, and citation}
 \begin{itemize}
-  \item Software distributed under AGPL-3.0. See \texttt{LICENSE.txt} for the full text.
-  \item Author and copyright: Jackson J. Alcázar (2025).
-  \item Suggested citation: \\ \emph{Alcázar, Jackson J. ``MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets''}. BibTeX entry is included in the app under the \emph{Help} tab.
-  \item Contact and improvements: visit the homepage (\url{https://jacksonalcazar.github.io/MLR-X}) for contact details or open issues in the official repository (\url{https://github.com/Jacksonalcazar/MLR-X/issues}).
+  \item \textbf{License}: MLR-X 1.0 is \emph{free software}, distributed under the GNU Affero General Public License v3.0 (AGPL-3.0). Full license details are available in \texttt{LICENSE.txt}, in the \emph{Help} tab of the application, and on the project homepage.
+
+  \item \textbf{Author and copyright}: Jackson J. Alcázar (2025).
+
+  \item \textbf{Citation}: when MLR-X 1.0 is used to generate results, analyses, or figures reported in a scientific publication, please cite the software as:\\
+  \emph{Alcázar, Jackson J. ``MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets.''}
 \end{itemize}
+
+% =========================================================
+\section{Configuration file example}
+\begin{lstlisting}[style=mlrx]
+# MLR-X configuration file
+# Generated by MLR-X version 1.0
+
+--------
+Dataset
+--------
+Dataset path = data.csv
+
+# Delimiter options:
+1) ;
+2) ,
+3) \t
+4) |
+Selected option: 1
+
+# Dependent variable options:
+1) Last column
+2) First column
+3) Second column
+4) Third column
+Selected option: 1
+
+# Non-variable columns options:
+1) None
+2) First column
+3) First and second column
+4) First, second, and third column
+Selected option: 2
+
+Exclude constant columns = false
+Constant threshold = 90.0
+Excluded observation IDs = none
+
+--------------
+Data splitting
+--------------
+# Split mode options:
+1) No split (use full dataset)
+2) Random split
+3) Manual split
+4) External validation dataset
+Selected option: 1
+
+---------
+Settings
+---------
+# Search method options:
+1) EPR-S
+2) All subsets (traditional)
+Selected option: 1
+
+# Iterations per seed mode options:
+1) auto
+2) manual (Max iterations per seed = none)
+3) Until converge
+Selected option: 1
+
+# Target metric options:
+1) R2
+2) adj-R2
+3) Q2 (LOO)
+4) RMSE (LOO)
+Selected option: 1
+
+# Covariance type options:
+1) Nonrobust
+2) HC0
+3) HC1
+4) HC2
+5) HC3
+Selected option: 1
+
+Max predictors per model = 6
+Number of seeds = 1000
+Seed size = 3
+Significance level = 0.05
+Correlation threshold = 0.9
+VIF threshold = 4.0
+Target metric cutoff = 0.8
+Top models to export = 5000
+Parallel jobs = 4
+
+# Prediction clipping
+Clip predictions = false
+Clip lower bound = none
+Clip upper bound = none
+
+# Output
+Output path = models.csv
+\end{lstlisting}
 
 \end{document}
