@@ -372,25 +372,66 @@ Results are exported to the specified CSV file using semicolon separation, with 
 
 \subsection{Metric definitions}
 
+Unless noted otherwise, $n_{\mathrm{train}}$ denotes the number of training observations, $n_{\mathrm{test}}$ the external test size, $p$ the number of predictors (excluding the intercept), $y_i$ a training response, $\hat{y}_i$ its fitted value, and $e_i = y_i - \hat{y}_i$ the corresponding residual.
+
 \paragraph{Training metrics}
 The following statistics are computed on the training set:
 \begin{itemize}
-  \item \textbf{R$^2$}: coefficient of determination, defined as one minus the ratio of the residual sum of squares to the total sum of squares.
-  \item \textbf{Adj--R$^2$}: R$^2$ adjusted for the number of predictors and observations, accounting for model complexity and penalizing overfitting.
-  \item \textbf{RMSE}: root mean squared error of the training residuals.
-  \item \textbf{MAE}: mean absolute error of the training residuals.
-  \item \textbf{$s$}: standard error of the regression, equivalent to the residual standard deviation.
-  \item \textbf{VIF (max/avg)}: maximum and average variance inflation factor values across all predictors, used to assess multicollinearity.
-  \item \textbf{$|r|_{\max}$}: maximum absolute pairwise Pearson correlation coefficient among predictors (when reported).
+  \item \textbf{R$^2$}: coefficient of determination,
+  \[
+  R^2 = 1 - \frac{\sum_{i=1}^{n_{\mathrm{train}}} (y_i - \hat{y}_i)^2}{\sum_{i=1}^{n_{\mathrm{train}}} (y_i - \bar{y}^{\mathrm{train}})^2}.
+  \]
+  \item \textbf{Adj--R$^2$}: adjusts for model size,
+  \[
+  R^2_{\mathrm{adj}} = 1 - (1 - R^2) \cdot \frac{n_{\mathrm{train}} - 1}{n_{\mathrm{train}} - p - 1}.
+  \]
+  \item \textbf{RMSE}: root mean squared error of the residuals,
+  \[
+  \mathrm{RMSE} = \sqrt{\frac{1}{n_{\mathrm{train}}} \sum_{i=1}^{n_{\mathrm{train}}} e_i^2}.
+  \]
+  \item \textbf{MAE}: mean absolute error,
+  \[
+  \mathrm{MAE} = \frac{1}{n_{\mathrm{train}}} \sum_{i=1}^{n_{\mathrm{train}}} |e_i|.
+  \]
+  \item \textbf{$s$}: residual standard error with the degrees-of-freedom correction used in the code (falling back to $n_{\mathrm{train}}$ if $n_{\mathrm{train}}-p-1 \leq 0$),
+  \[
+  s = \sqrt{\frac{\sum_{i=1}^{n_{\mathrm{train}}} e_i^2}{n_{\mathrm{train}} - p - 1}}.
+  \]
+  \item \textbf{VIF (max/avg)}: for each predictor $x_j$, the variance inflation factor
+  \[
+  \mathrm{VIF}_j = \frac{1}{1 - R_j^2}
+  \]
+  where $R_j^2$ comes from regressing $x_j$ on the remaining predictors (with intercept). The reported values are the maximum and average $\mathrm{VIF}_j$ across all predictors.
+  \item \textbf{$|r|_{\max}$}: maximum absolute pairwise Pearson correlation among predictors,
+  \[
+  |r|_{\max} = \max_{j < k} \left|\mathrm{corr}(x_j, x_k)\right|.
+  \]
 \end{itemize}
 
 \paragraph{Internal validation metrics}
-Internal validation is performed using leave-one-out (LOO) and/or $k$-fold cross-validation. The reported metrics mirror those used for the training set and include Q$^2$ (PRESS-based coefficient of determination), RMSE, MAE, and $s$, all computed according to the selected cross-validation scheme.
+Internal validation is performed using leave-one-out (LOO) and/or $k$-fold cross-validation. For LOO, the prediction for observation $i$ is computed as $\hat{y}_i^{(-i)} = y_i - e_i/(1 - h_i)$, where $h_i$ is the leverage, leading to LOO residuals $e_i^{\mathrm{LOO}} = y_i - \hat{y}_i^{(-i)}$. The reported metrics are
+\[
+Q^2_{\mathrm{LOO}} = 1 - \frac{\sum_i (e_i^{\mathrm{LOO}})^2}{\sum_i (y_i - \bar{y}^{\mathrm{train}})^2},\quad
+\mathrm{RMSE}_{\mathrm{LOO}} = \sqrt{\frac{1}{n_{\mathrm{train}}}\sum_i (e_i^{\mathrm{LOO}})^2},\quad
+\mathrm{MAE}_{\mathrm{LOO}} = \frac{1}{n_{\mathrm{train}}}\sum_i |e_i^{\mathrm{LOO}}|,
+\]
+with
+\[
+ s_{\mathrm{LOO}} = \sqrt{\frac{\sum_i (e_i^{\mathrm{LOO}})^2}{n_{\mathrm{train}} - p - 1}}
+\]
+following the same degrees-of-freedom rule as $s$ above. The $k$-fold versions use the corresponding fold residuals in place of $e_i^{\mathrm{LOO}}$.
 
 \paragraph{External validation metrics}
-External validation metrics are computed on the independent test set and include Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
-
-The Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ coefficients are based on the sum of squared prediction errors (SSE) and follow established QSAR validation conventions, differing in the choice of the reference variance used for normalization.
+External validation metrics are computed on the independent test set with residuals $e_i^{\mathrm{test}} = y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}$. They include Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$,
+\[
+\mathrm{RMSE}_{\mathrm{ext}} = \sqrt{\frac{1}{n_{\mathrm{test}}}\sum_i (e_i^{\mathrm{test}})^2},\qquad
+\mathrm{MAE}_{\mathrm{ext}} = \frac{1}{n_{\mathrm{test}}}\sum_i |e_i^{\mathrm{test}}|,
+\]
+and the external residual standard error
+\[
+ s_{\mathrm{ext}} = \sqrt{\frac{\sum_i (e_i^{\mathrm{test}})^2}{n_{\mathrm{test}} - p - 1}},
+\]
+with the same safe degrees-of-freedom fallback used in the code. The Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ coefficients are based on the sum of squared prediction errors (SSE) and follow established QSAR validation conventions, differing in the choice of the reference variance used for normalization.
 
 \begin{itemize}
 
