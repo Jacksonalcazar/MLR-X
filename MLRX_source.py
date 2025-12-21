@@ -171,12 +171,11 @@ VERSION = "1.0"
 
 def _default_parallel_jobs() -> int:
     return max(1, os.cpu_count() or 1)
-MLRX_HOMEPAGE_URL = "https://github.com/Jacksonalcazar/MLR-X"
+MLRX_HOMEPAGE_URL = "https://jacksonalcazar.github.io/MLR-X"
 MANUAL_URL = "https://github.com/Jacksonalcazar/MLR-X/manual/MLR-X_manual_1.0.pdf"
 BUG_REPORT_URL = "https://github.com/Jacksonalcazar/MLR-X/issues"
-PAYPAL_DONATION_URL = (
-    "https://www.paypal.com/donate?business=jacksonalcazar@gmail.com&currency_code=USD"
-)
+PAYPAL_DONATION_URL = "https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG"
+
 CITATION_TEXT = (
     "Alcázar, Jackson J., \"MLR-X 1.0: A Scalable Software for Multiple Linear Regression "
     "on Small and Large Datasets\", - the rest will be added when the article is published."
@@ -186,7 +185,7 @@ CITATION_BIB = """@software{alcazar_mlr_x_1_0,
   title = {{MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets}},
   year = {2025},
   version = {1.0},
-  note = {Detalles adicionales se proporcionarán después de la publicación.}
+  note = {Additional details will be provided after publication.}
 }
 """
 
@@ -236,27 +235,33 @@ LINEAR_FIT_COLOR_WIDTH = 7
 
 TARGET_METRIC_DISPLAY = {
     "R2": R_SQUARED_SYMBOL,
-    "R2_adj": f"{R_SQUARED_SYMBOL} adj",
+    "R2_adj": f"adj-{R_SQUARED_SYMBOL}",
     "R2_loo": f"{Q_SQUARED_SYMBOL} (LOO)",
+    "RMSE_loo": "RMSE (LOO)",
 }
 
 CONFIG_TARGET_METRIC_DISPLAY = {
     "R2": "R2",
-    "R2_adj": "R2 adj",
+    "R2_adj": "adj-R2",
     "R2_loo": "Q2 (LOO)",
+    "RMSE_loo": "RMSE (LOO)",
 }
 
 RESULTS_SORT_DISPLAY_TO_KEY = {
     DEFAULT_SORT_LABEL: "R2",
-    f"{R_SQUARED_SYMBOL} adj": "R2 adj",
+    f"adj-{R_SQUARED_SYMBOL}": "adj-R2",
     "RMSE": "RMSE",
     RESULTS_STANDARD_ERROR_LABEL: "s",
     "MAE": "MAE",
     "N pred": "N var",
-    "VIF max": "VIF max",
-    "VIF avg": "VIF avg",
+    "VIFmax": "VIFmax",
+    "VIFavg": "VIFavg",
     "Q2F2": "Q2F2",
     "Q2F1": "Q2F1",
+}
+
+RESULTS_SORT_LEGACY_DISPLAY_TO_KEY = {
+    f"{R_SQUARED_SYMBOL} adj": "adj-R2",
 }
 
 RESULTS_SORT_KEY_TO_DISPLAY = {
@@ -264,6 +269,52 @@ RESULTS_SORT_KEY_TO_DISPLAY = {
 }
 
 TARGET_METRIC_DISPLAY_TO_KEY = {value: key for key, value in TARGET_METRIC_DISPLAY.items()}
+LOO_TARGET_METRICS = {"R2_loo", "RMSE_loo"}
+
+
+def _metric_score(metric_key: str, metrics: dict[str, float]) -> float:
+    """Return a comparable, higher-is-better score for the target metric."""
+
+    value = metrics.get(metric_key)
+    if value is None or not np.isfinite(value):
+        return float("-inf")
+
+    if metric_key == "RMSE_loo":
+        if value <= 0:
+            return float("-inf")
+        return float(-math.log(value))
+
+    return float(value)
+
+
+def _format_threshold_display(threshold: object) -> str:
+    if threshold is None:
+        return "none"
+    try:
+        numeric = float(threshold)
+    except (TypeError, ValueError):
+        return "none"
+    if not np.isfinite(numeric):
+        return "none"
+    return f"{numeric:.2f}"
+
+
+def _metric_threshold_value(config: EPRSConfig) -> float:
+    """Normalize the user cutoff for the selected target metric."""
+
+    threshold_raw = getattr(config, "tm_cutoff", None)
+    if threshold_raw is None:
+        return float("-inf")
+
+    threshold = float(threshold_raw)
+    metric_key = getattr(config, "target_metric", "R2")
+
+    if metric_key == "RMSE_loo":
+        if threshold <= 0:
+            raise ValueError("Target metric cutoff must be greater than zero for RMSE (LOO).")
+        return float(-math.log(threshold))
+
+    return threshold
 
 METHOD_DISPLAY_TO_KEY = {
     "EPR-S": "eprs",
@@ -386,7 +437,7 @@ class EPRSConfig:
     signif_lvl: float = 0.05
     corr_threshold: float = 0.90
     vif_threshold: float = 4.0
-    report_r2_threshold: float = 0.80
+    tm_cutoff: Optional[float] = 0.80
     n_jobs: int = field(default_factory=_default_parallel_jobs)
     iterations_mode: str = ITERATION_MODE_AUTO
     max_iterations_per_seed: Optional[int] = None
@@ -654,14 +705,14 @@ METHOD_INFO_TEXT = {
     "All subsets (traditional)": "For fewer than 25 variables.",
 }
 
-METADATA_PREFIX = "#EPRS-S "
+METADATA_PREFIX = "#Metadata:"
 METADATA_SUFFIX = ";#"
-METADATA_HEADER_LABEL = "metadata:"
+METADATA_HEADER_LABEL = "#Metadata:"
 LEGACY_METADATA_COLUMNS = {"metadata", METADATA_HEADER_LABEL.strip().lower()}
 
 
 def _serialize_metadata(metadata: dict[str, object]) -> str:
-    return METADATA_PREFIX + json.dumps(metadata, ensure_ascii=False) + METADATA_SUFFIX
+    return METADATA_PREFIX + json.dumps(metadata, ensure_ascii=False)
 
 
 def _deserialize_metadata(value: object) -> dict:
@@ -714,7 +765,7 @@ def _write_results_csv(
     float_format: str = "%.4f",
 ) -> Path:
     metadata_value = _serialize_metadata(metadata)
-    header_values = list(export_df.columns) + [METADATA_HEADER_LABEL, metadata_value]
+    header_values = list(export_df.columns) + [metadata_value, "#"]
 
     with export_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter=sep)
@@ -738,7 +789,7 @@ def _write_results_csv(
             handle.write(f"{raw_line}{sep}{sep}\n")
 
     return export_path
-METADATA_VERSION = 1
+METADATA_VERSION = 1.0
 
 DELIMITER_NAME_TO_VALUE = {
     "comma": ",",
@@ -759,7 +810,7 @@ SETTINGS_NUMERIC_KEYS = [
     "signif_lvl",
     "corr_threshold",
     "vif_threshold",
-    "report_r2_threshold",
+    "tm_cutoff",
     "export_limit",
     "n_jobs",
 ]
@@ -808,7 +859,6 @@ CONFIG_LIST_OPTIONS = {
         ("none", "No split (use full dataset)"),
         ("random", "Random split"),
         ("manual", "Manual split"),
-        ("external", "External validation dataset"),
     ],
 }
 
@@ -876,7 +926,7 @@ CONFIG_FIELD_LABELS: dict[str, str] = {
     "signif_lvl": "Significance level",
     "corr_threshold": "Correlation threshold",
     "vif_threshold": "VIF threshold",
-    "report_r2_threshold": "Report R2 threshold",
+    "tm_cutoff": "Target metric cutoff",
     "export_limit": "Top models to export",
     "n_jobs": "Parallel jobs",
     "clip_enabled": "Clip predictions",
@@ -976,14 +1026,50 @@ def _build_split_metadata_for_cli(split_settings: Optional[dict]) -> dict:
     elif mode == "manual":
         meta["train_ids"] = MLRXApp._normalize_id_iterable(split_settings.get("train_ids"))
         meta["test_ids"] = MLRXApp._normalize_id_iterable(split_settings.get("test_ids"))
-    elif mode == "external":
-        meta["external_path"] = str(split_settings.get("external_path", ""))
-        delimiter = split_settings.get("external_delimiter")
-        normalized = MLRXApp._normalize_delimiter_value(delimiter)
-        meta["external_delimiter"] = (
-            MLRXApp._serialize_delimiter_value(normalized) if normalized else ""
-        )
     return meta
+
+
+def _resolve_iterations_metadata_value(
+    method: str,
+    iterations_mode: str,
+    manual_iterations: Optional[object],
+    avg_iterations_per_seed: Optional[object],
+    max_iterations_per_seed: Optional[object],
+    *,
+    formatter: Callable[[object], str],
+) -> str:
+    if (method or "").lower() != "eprs":
+        return "none"
+
+    mode = (iterations_mode or ITERATION_MODE_AUTO).lower()
+    if mode == ITERATION_MODE_CONVERGE:
+        return "until converge"
+
+    if mode == ITERATION_MODE_MANUAL:
+        if manual_iterations in {None, ""}:
+            return "none"
+        return formatter(manual_iterations)
+
+    def _to_numeric(value: object) -> Optional[float]:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if np.isfinite(numeric) else None
+
+    resolved_value = _to_numeric(max_iterations_per_seed)
+    if resolved_value is None:
+        avg_numeric = _to_numeric(avg_iterations_per_seed)
+        if avg_numeric is not None:
+            resolved_value = avg_numeric * 2.0
+
+    if resolved_value is None:
+        resolved_value = _to_numeric(manual_iterations)
+
+    if resolved_value is None:
+        return "none"
+
+    return formatter(resolved_value)
 
 
 def _build_cli_metadata(
@@ -997,6 +1083,7 @@ def _build_cli_metadata(
     max_iterations_per_seed: Optional[object] = None,
 ) -> dict:
     delimiter_value = MLRXApp._normalize_delimiter_value(config.delimiter)
+    excluded_obs = (getattr(config, "excluded_observations", "") or "").strip() or "none"
     metadata: dict[str, object] = {
         "version": METADATA_VERSION,
         "dataset_path": config.data_path,
@@ -1005,10 +1092,9 @@ def _build_cli_metadata(
         "non_variable": config.non_variable_spec,
         "exclude_constant": bool(config.exclude_constant),
         "constant_threshold": float(config.constant_threshold),
-        "excluded_observations": config.excluded_observations,
+        "excluded_observations": excluded_obs,
         "target_metric": config.target_metric,
         "top_models": int(config.export_limit),
-        "settings_keys": "#".join(SETTINGS_NUMERIC_KEYS),
         "method": config.method,
         "cov_type": getattr(config, "cov_type", COVARIANCE_DEFAULT_KEY),
         "iterations_mode": getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
@@ -1021,9 +1107,13 @@ def _build_cli_metadata(
     metadata["settings_values"] = "#".join(settings_values)
     metadata["split"] = _build_split_metadata_for_cli(split_settings)
 
-    max_iterations = getattr(config, "max_iterations_per_seed", None)
-    metadata["max_iterations_per_seed"] = (
-        None if max_iterations is None else MLRXApp._format_numeric_value(max_iterations)
+    metadata["max_iterations_per_seed"] = _resolve_iterations_metadata_value(
+        getattr(config, "method", "eprs"),
+        getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
+        getattr(config, "max_iterations_per_seed", None),
+        avg_iterations_per_seed,
+        max_iterations_per_seed,
+        formatter=MLRXApp._format_numeric_value,
     )
 
     if config.clip_predictions is not None:
@@ -1033,8 +1123,6 @@ def _build_cli_metadata(
         metadata["clip"] = {"enabled": False}
 
     metadata["kfold"] = {"enabled": False, "folds": None, "repeats": None}
-    metadata["validation_csv"] = ""
-    metadata["validation_delimiter"] = ""
 
     def _store_cpu_time(key_prefix: str, value: Optional[float]) -> None:
         if value is None:
@@ -1062,25 +1150,6 @@ def _build_cli_metadata(
             metadata["models_explored"] = int(models_explored)
         except (TypeError, ValueError):
             pass
-
-    if avg_iterations_per_seed is not None:
-        try:
-            metadata["avg_iterations_per_seed"] = float(avg_iterations_per_seed)
-        except (TypeError, ValueError):
-            pass
-
-    resolved_max_iters = max_iterations_per_seed
-    if resolved_max_iters is None:
-        resolved_max_iters = getattr(config, "max_iterations_per_seed", None)
-
-    if resolved_max_iters is not None:
-        try:
-            numeric_max_iters = float(resolved_max_iters)
-        except (TypeError, ValueError):
-            pass
-        else:
-            if np.isfinite(numeric_max_iters):
-                metadata["max_r2_calls"] = int(numeric_max_iters)
 
     return metadata
 
@@ -1181,19 +1250,6 @@ def write_configuration_file(
                 "manual_test_ids", _normalize_ids_for_config(test_ids)
             )
         )
-    elif split_mode == "external":
-        lines.append(
-            _format_field_line("external_path", split_settings.get("external_path", ""))
-        )
-        ext_delim = split_settings.get("external_delimiter", ";")
-        normalized = MLRXApp._normalize_delimiter_value(ext_delim)
-        lines.extend(
-            _format_option_block(
-                key="external_delimiter",
-                options=delimiter_options,
-                selected_value=normalized if normalized else ";",
-            )
-        )
 
     if lines[-1] != "":
         lines.append("")
@@ -1248,7 +1304,7 @@ def write_configuration_file(
     lines.append(_format_field_line("signif_lvl", config.signif_lvl))
     lines.append(_format_field_line("corr_threshold", config.corr_threshold))
     lines.append(_format_field_line("vif_threshold", config.vif_threshold))
-    lines.append(_format_field_line("report_r2_threshold", config.report_r2_threshold))
+    lines.append(_format_field_line("tm_cutoff", config.tm_cutoff))
     lines.append(_format_field_line("export_limit", config.export_limit))
     lines.append(_format_field_line("n_jobs", config.n_jobs))
 
@@ -1421,7 +1477,13 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
     signif_lvl = float(values.get("signif_lvl", 0.05))
     corr_threshold = float(values.get("corr_threshold", 0.90))
     vif_threshold = float(values.get("vif_threshold", 4.0))
-    report_r2_threshold = float(values.get("report_r2_threshold", 0.80))
+    report_r2_raw = values.get("tm_cutoff", 0.80)
+    if str(report_r2_raw).strip().lower() == "none":
+        tm_cutoff: Optional[float] = None
+    else:
+        tm_cutoff = float(report_r2_raw)
+        if target_metric == "RMSE_loo" and tm_cutoff <= 0:
+            raise ValueError("Target metric cutoff must be greater than zero for RMSE (LOO).")
     export_limit = _parse_positive_int("export_limit", DEFAULT_EXPORT_LIMIT)
     default_jobs = _default_parallel_jobs()
     n_jobs_requested = _parse_positive_int("n_jobs", default_jobs)
@@ -1465,14 +1527,9 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         split_settings["train_ids"] = train_ids
         split_settings["test_ids"] = test_ids
     elif split_mode == "external":
-        external_path = _require("external_path")
-        external_delimiter = values.get("external_delimiter", ";")
-        normalized_ext = _normalize_delimiter_from_config(external_delimiter)
-        split_settings.update(
-            {
-                "external_path": external_path,
-                "external_delimiter": normalized_ext,
-            }
+        raise ValueError(
+            "External validation datasets are configured in the Validation tab; "
+            "choose none, random, or manual for data splitting."
         )
 
     output_path_text = values.get("output_path", "models.csv")
@@ -1493,7 +1550,7 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         signif_lvl=signif_lvl,
         corr_threshold=corr_threshold,
         vif_threshold=vif_threshold,
-        report_r2_threshold=report_r2_threshold,
+        tm_cutoff=tm_cutoff,
         n_jobs=n_jobs,
         clip_predictions=clip_predictions,
         export_limit=export_limit,
@@ -1678,21 +1735,28 @@ def run_cli(config_path: Union[str, Path]) -> None:
     models_found = int(result.get("models_found", 0))
     models_explored = int(result.get("models_explored", 0))
     print(f"Total models explored: {models_explored}")
-    print(
-        f"Models with {R_SQUARED_SYMBOL} >= {config.report_r2_threshold:.2f}: {models_found}"
-    )
+    metric_label = TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric)
+    comparator = ">=" if config.target_metric != "RMSE_loo" else "<="
+    threshold_display = _format_threshold_display(getattr(config, "tm_cutoff", None))
+    if getattr(config, "tm_cutoff", None) is None:
+        print(f"Models reported without cutoff: {models_found}")
+    else:
+        print(
+            f"Models with {metric_label} {comparator} {threshold_display}: {models_found}"
+        )
     filtered_models = len(results_df.index) if results_df is not None else 0
     print(f"Filtrated and reported models: {filtered_models}")
 
-    if results_df is None or results_df.empty:
-        print("No models met the reporting threshold.")
-        cpu_seconds = total_cpu_minutes * 60.0
-        print(f"Model search CPU time: {search_cpu_minutes * 60.0:.2f} s ({search_cpu_minutes:.2f} min)")
-        print(f"Total CPU time: {cpu_seconds:.2f} s ({total_cpu_minutes:.2f} min)")
-        return
+    export_df = results_df if results_df is not None else pd.DataFrame()
+
+    if export_df.empty:
+        print(
+            "No models met the reporting threshold. "
+            "An empty results file will be written."
+        )
 
     export_path = export_results_to_csv_cli(
-        results_df,
+        export_df,
         config,
         split_settings,
         output_path,
@@ -1710,6 +1774,7 @@ def run_cli(config_path: Union[str, Path]) -> None:
     print(f"Total CPU time: {total_cpu_minutes * 60.0:.2f} s ({total_cpu_minutes:.2f} min)")
     print()
     print(f"Results exported to {export_path}")
+    print("Finished.")
 
 
 def _parse_id_entries(text: str) -> set[str]:
@@ -2047,35 +2112,9 @@ def load_dataset(
                     f"{missing}."
                 )
     elif split_mode == "external":
-        external_path = (split or {}).get("external_path")
-        if not external_path:
-            raise ValueError("External split: please provide a testing dataset path.")
-        external_path = str(external_path)
-        if not Path(external_path).exists():
-            raise FileNotFoundError(f"External split: dataset not found: {external_path}")
-        external_delimiter = (split or {}).get("external_delimiter", delimiter)
-        external_df = pd.read_csv(external_path, delimiter=external_delimiter)
-        external_df.columns = [
-            col.strip() if isinstance(col, str) else col for col in external_df.columns
-        ]
-
-        missing_cols = [col for col in feature_cols + [target_column] if col not in external_df.columns]
-        if missing_cols:
-            missing = ", ".join(missing_cols)
-            raise ValueError(
-                "External split: the testing file is missing required columns: "
-                f"{missing}."
-            )
-
-        # Preserve ID column if available; otherwise synthesize one for bookkeeping
-        if id_column in external_df.columns:
-            ext_id_series = external_df[[id_column]]
-        else:
-            ext_id_series = pd.DataFrame({id_column: range(1, len(external_df) + 1)})
-
-        test_df = pd.concat(
-            [ext_id_series, external_df[feature_cols], external_df[[target_column]]],
-            axis=1,
+        raise ValueError(
+            "Use the Validation tab to load an external testing dataset instead of "
+            "the data splitting controls."
         )
 
     X_train = train_df.loc[:, feature_cols]
@@ -2852,13 +2891,56 @@ def _base_compute_metrics(
         "variables": vars_,
     }
 
-    if config.target_metric == "R2_loo":
-        loo_score = _compute_loo_r2(exog, context.y_np, config.clip_predictions)
-        if loo_score is None or not np.isfinite(loo_score):
+    if config.target_metric in LOO_TARGET_METRICS:
+        loo_metrics = _evaluate_model_loo(context, vars_, config.clip_predictions)
+        if not np.isfinite(loo_metrics.get("R2_loo", float("nan"))):
             return None
-        metrics["R2_loo"] = float(loo_score)
+        metrics.update(loo_metrics)
 
     return metrics
+
+
+def _evaluate_model_loo(
+    context: EPRSContext, variables: list[str], clip_predictions: Optional[tuple[float, float]]
+) -> dict[str, float]:
+    X = take(context, variables)
+    y = context.y_np.astype(float)
+    n_samples = y.shape[0]
+    if n_samples <= X.shape[1]:
+        raise ValueError("LOO: samples must exceed the number of variables.")
+
+    design = np.c_[np.ones(n_samples), X]
+    xtx = design.T @ design
+    try:
+        xtx_inv = np.linalg.inv(xtx)
+    except np.linalg.LinAlgError:
+        raise ValueError("LOO: design matrix is singular.") from None
+
+    xty = design.T @ y
+    coefficients = xtx_inv @ xty
+    fitted = design @ coefficients
+    residuals = y - fitted
+    hat_diag = np.sum(design * (design @ xtx_inv), axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        loo_pred = y - residuals / (1 - hat_diag)
+    if clip_predictions is not None:
+        lo, hi = clip_predictions
+        loo_pred = np.clip(loo_pred, lo, hi)
+    loo_residuals = y - loo_pred
+
+    mse = float(np.mean(loo_residuals**2))
+    rmse = float(np.sqrt(mse))
+    mae = float(np.mean(np.abs(loo_residuals)))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    ss_res = float(np.sum(loo_residuals**2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot else float("nan")
+    param_count = len(variables) + 1
+    return {
+        "R2_loo": r2,
+        "RMSE_loo": rmse,
+        "s_loo": _compute_standard_error(loo_residuals, param_count),
+        "MAE_loo": mae,
+    }
 
 
 def make_vif_funcs(context: EPRSContext):
@@ -2942,7 +3024,21 @@ def _finalize_results_dataframe(
     if primary_metric not in df_out.columns:
         df_out[primary_metric] = np.nan
 
-    df_out = df_out.sort_values(primary_metric, ascending=False, na_position="last")
+    def _sort_key(series: pd.Series) -> pd.Series:
+        if primary_metric == "RMSE_loo":
+            values = series.astype(float)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                transformed = -np.log(values)
+            transformed = transformed.where(np.isfinite(transformed), float("-inf"))
+            return transformed
+        return series
+
+    df_out = df_out.sort_values(
+        primary_metric,
+        ascending=False,
+        na_position="last",
+        key=_sort_key,
+    )
 
     def timed_vif_stats(vars_list):
         start = time.process_time()
@@ -3006,7 +3102,13 @@ def _finalize_results_dataframe(
         ascending=[False, True],
         na_position="last",
     )
-    df_out.insert(0, "Model", range(1, len(df_out) + 1))
+
+    r2_values = pd.to_numeric(df_out.get("R2"), errors="coerce")
+    r2_order = r2_values.sort_values(ascending=False, na_position="last")
+    model_ids = pd.Series(
+        np.arange(1, len(df_out) + 1, dtype=int), index=r2_order.index
+    )
+    df_out.insert(0, "Model", model_ids.loc[df_out.index].to_numpy())
 
     return df_out.copy(deep=True), vif_cpu_minutes
 
@@ -3028,9 +3130,11 @@ def _all_subsets_worker(
     context: EPRSContext,
     config: EPRSConfig,
     include_loo: bool,
+    threshold_value: float,
 ):
     _ensure_heavy_imports_loaded()
     calc_vif, _ = make_vif_funcs(context)
+    metric_key = config.target_metric
     vars_list = list(combo)
     local_counter = {"r2_calls": 0}
     cpu_start = time.process_time()
@@ -3053,7 +3157,7 @@ def _all_subsets_worker(
             skip_corr_screen=True,
         )
     cpu_minutes = (time.process_time() - cpu_start) / 60.0
-    if metrics and metrics.get("R2", float("-inf")) >= config.report_r2_threshold:
+    if metrics and _metric_score(metric_key, metrics) >= threshold_value:
         vifs = calc_vif(vars_list)
         if vifs.size == 0 or np.nanmax(vifs) <= config.vif_threshold:
             record = {
@@ -3064,8 +3168,11 @@ def _all_subsets_worker(
                 "s": metrics.get("s"),
                 "MAE": metrics["MAE"],
             }
-            if include_loo and "R2_loo" in metrics:
-                record["R2_loo"] = metrics["R2_loo"]
+            if include_loo:
+                if "R2_loo" in metrics:
+                    record["R2_loo"] = metrics["R2_loo"]
+                if "RMSE_loo" in metrics:
+                    record["RMSE_loo"] = metrics["RMSE_loo"]
             return record, local_counter["r2_calls"], cpu_minutes, os.getpid(), False
     return None, local_counter["r2_calls"], cpu_minutes, os.getpid(), correlation_blocked
 
@@ -3086,12 +3193,7 @@ def eprs(
     metric_key = config.target_metric
 
     def metric_value(metrics: dict[str, float]) -> float:
-        value = metrics.get(metric_key)
-        if value is None:
-            return float("-inf")
-        if not np.isfinite(value):
-            return float("-inf")
-        return float(value)
+        return _metric_score(metric_key, metrics)
 
     def limit_reached() -> bool:
         return max_calls is not None and counter["r2_calls"] >= max_calls
@@ -3256,15 +3358,11 @@ def _process_combination_worker(
     _ensure_heavy_imports_loaded()
     calc_vif, _ = make_vif_funcs(context)
     metric_key = config.target_metric
-    include_loo = metric_key == "R2_loo"
+    include_loo = metric_key in LOO_TARGET_METRICS
+    threshold_value = _metric_threshold_value(config)
 
     def metric_value_local(metrics: dict[str, float]) -> float:
-        value = metrics.get(metric_key)
-        if value is None:
-            return float("-inf")
-        if not np.isfinite(value):
-            return float("-inf")
-        return float(value)
+        return _metric_score(metric_key, metrics)
 
     local_hits: list[dict] = []
     seen_sets = set()
@@ -3283,7 +3381,7 @@ def _process_combination_worker(
             vars_,
             counter=counter,
         )
-        if res and res["R2"] >= config.report_r2_threshold:
+        if res and metric_value_local(res) >= threshold_value:
             vifs = calc_vif(vars_)
             if vifs.size == 0 or np.nanmax(vifs) <= config.vif_threshold:
                 vset = tuple(sorted(vars_))
@@ -3297,8 +3395,11 @@ def _process_combination_worker(
                         "s": res.get("s"),
                         "MAE": res["MAE"],
                     }
-                    if include_loo and "R2_loo" in res:
-                        record["R2_loo"] = res["R2_loo"]
+                    if include_loo:
+                        if "R2_loo" in res:
+                            record["R2_loo"] = res["R2_loo"]
+                        if "RMSE_loo" in res:
+                            record["RMSE_loo"] = res["RMSE_loo"]
                     local_hits.append(record)
         return res
 
@@ -3531,7 +3632,13 @@ def run_eprs(
     )
 
     if results_df is None:
-        log(f"No models found with {R_SQUARED_SYMBOL} >= {config.report_r2_threshold:.2f}")
+        metric_label = TARGET_METRIC_DISPLAY.get(config.target_metric, R_SQUARED_SYMBOL)
+        comparator = ">=" if config.target_metric != "RMSE_loo" else "<="
+        threshold_display = _format_threshold_display(getattr(config, "tm_cutoff", None))
+        if getattr(config, "tm_cutoff", None) is None:
+            log("No models found with the current cutoff settings")
+        else:
+            log(f"No models found with {metric_label} {comparator} {threshold_display}")
 
     return {
         "results_path": None,
@@ -3597,7 +3704,8 @@ def run_all_subsets(
     log(f"Total subsets: {total_combos}")
 
     calc_vif, vif_stats = make_vif_funcs(context)
-    include_loo = config.target_metric == "R2_loo"
+    include_loo = config.target_metric in LOO_TARGET_METRICS
+    threshold_value = _metric_threshold_value(config)
 
     log("Filtering subsets with correlated predictors...")
 
@@ -3623,6 +3731,7 @@ def run_all_subsets(
             repeat(context),
             repeat(config),
             repeat(include_loo),
+            repeat(threshold_value),
             chunksize=1000,
         ):
             processed += 1
@@ -3657,7 +3766,13 @@ def run_all_subsets(
     models_found = len(hits)
 
     if results_df is None:
-        log(f"No models found with {R_SQUARED_SYMBOL} >= {config.report_r2_threshold:.2f}")
+        metric_label = TARGET_METRIC_DISPLAY.get(config.target_metric, R_SQUARED_SYMBOL)
+        comparator = ">=" if config.target_metric != "RMSE_loo" else "<="
+        threshold_display = _format_threshold_display(getattr(config, "tm_cutoff", None))
+        if getattr(config, "tm_cutoff", None) is None:
+            log("No models found with the current cutoff settings")
+        else:
+            log(f"No models found with {metric_label} {comparator} {threshold_display}")
 
     avg_calls = total_calls / processed if processed else 0.0
     max_calls = int(total_calls)
@@ -4246,7 +4361,7 @@ class MLRXApp(tk.Tk):
         params_frame = ttk.LabelFrame(self.config_tab, text="Settings")
         params_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-        settings_row_padding = {"padx": padding["padx"], "pady": (5, 4)}
+        settings_row_padding = {"padx": padding["padx"], "pady": (4, 4)}
 
         defaults = EPRSConfig()
         self.constant_threshold_var.set(str(defaults.constant_threshold))
@@ -4257,7 +4372,9 @@ class MLRXApp(tk.Tk):
             "signif_lvl": tk.DoubleVar(value=defaults.signif_lvl),
             "corr_threshold": tk.DoubleVar(value=defaults.corr_threshold),
             "vif_threshold": tk.DoubleVar(value=defaults.vif_threshold),
-            "report_r2_threshold": tk.DoubleVar(value=defaults.report_r2_threshold),
+            "tm_cutoff": tk.StringVar(
+                value=str(defaults.tm_cutoff)
+            ),
             "export_limit": tk.IntVar(value=defaults.export_limit),
             "n_jobs": tk.IntVar(value=defaults.n_jobs),
         }
@@ -4363,7 +4480,7 @@ class MLRXApp(tk.Tk):
             ("Significance level", "signif_lvl"),
             ("Correlation threshold", "corr_threshold"),
             ("VIF threshold", "vif_threshold"),
-            (f"Minimum report {R_SQUARED_SYMBOL}", "report_r2_threshold"),
+            ("", "tm_cutoff"),
             ("Top models to report", "export_limit"),
             ("Parallel jobs", "n_jobs"),
         ]
@@ -4380,12 +4497,31 @@ class MLRXApp(tk.Tk):
             idx = offset
             label_container = ttk.Frame(params_frame)
             label_container.grid(row=idx, column=0, sticky="w", **settings_row_padding)
-            ttk.Label(label_container, text=label + ":").pack(side="left")
+            if key == "tm_cutoff":
+                self.report_threshold_label_var = tk.StringVar()
+                self._update_report_threshold_label()
+                ttk.Label(
+                    label_container, textvariable=self.report_threshold_label_var
+                ).pack(side="left")
+            else:
+                ttk.Label(label_container, text=label + ":").pack(side="left")
 
             entry_container = ttk.Frame(params_frame)
             entry_container.grid(row=idx, column=1, sticky="w", **settings_row_padding)
             entry = ttk.Entry(entry_container, textvariable=self.params_vars[key], width=10)
             entry.pack(side="left")
+
+            if key == "tm_cutoff":
+                info_button(
+                    entry_container,
+                    tooltip_text=(
+                        "Cutoff skips candidate models with insufficient predictive performance.\n"
+                        "When RMSE (LOO) is selected, models with errors above the defined cutoff are discarded.\n"
+                        "Enter \"none\" to run without a cutoff."
+                    ),
+                    title="Target metric cutoff",
+                    show_popover=False,
+                ).pack(side="left", padx=(4, 0))
 
             if key in hint_tooltips:
                 info_button(
@@ -4467,6 +4603,10 @@ class MLRXApp(tk.Tk):
                 )
 
         params_frame.columnconfigure(3, weight=1)
+
+        self.target_metric_choice.trace_add(
+            "write", lambda *_: self._update_report_threshold_label()
+        )
 
         self._on_method_change()
 
@@ -4570,12 +4710,12 @@ class MLRXApp(tk.Tk):
         training_heading_map = {
             "Variables": "Predictors",
             "R2": f"{R_SQUARED_SYMBOL} (train)",
-            "R2_adj": f"{R_SQUARED_SYMBOL} adj",
+            "R2_adj": f"adj-{R_SQUARED_SYMBOL}",
             "RMSE": "RMSE (train)",
             "s": f"{RESULTS_STANDARD_ERROR_LABEL} (train)",
             "MAE": "MAE (train)",
-            "VIF_max": "VIF max",
-            "VIF_avg": "VIF avg",
+            "VIF_max": "VIFmax",
+            "VIF_avg": "VIFavg",
             "N_var": "N pred",
         }
         self.training_tree = ttk.Treeview(
@@ -4719,9 +4859,9 @@ class MLRXApp(tk.Tk):
             "Variables": "Predictors",
             "RMSE_ext": "RMSE (ext)",
             "MAE_ext": "MAE (ext)",
-            "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F1",
-            "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F2 ({R_SQUARED_SYMBOL} ext)",
-            "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F3",
+            "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F?",
+            "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F?",
+            "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F?",
             "N_var": "N pred",
         }
         self.external_results_tree = ttk.Treeview(
@@ -4816,7 +4956,7 @@ class MLRXApp(tk.Tk):
 
         contact_label = ttk.Label(
             content,
-            text="Contact: jacksonalcazar@gmail.com",
+            text="Contact: jjalcazar.dev@gmail.com",
             justify="center",
         )
         contact_label.pack()
@@ -4929,12 +5069,6 @@ class MLRXApp(tk.Tk):
         self._center_dialog(window)
         window.grab_set()
         window.focus_set()
-
-        message = (
-            "Any support is greatly appreciated"
-        )
-        message_label = ttk.Label(content, text=message, wraplength=360, justify="center")
-        message_label.pack(pady=(0, 15))
 
         donate_btn = ttk.Button(
             content,
@@ -5182,6 +5316,12 @@ class MLRXApp(tk.Tk):
 
         if hasattr(self, "validation_tab"):
             self.validation_tab.sync_split_mode(mode)
+
+    def _update_report_threshold_label(self, *_: object) -> None:
+        if not getattr(self, "report_threshold_label_var", None):
+            return
+        label_text = "Target metric cutoff:"
+        self.report_threshold_label_var.set(label_text)
 
     def _toggle_clip_entries(self):
         state = "normal" if self.clip_enabled.get() else "disabled"
@@ -5558,17 +5698,16 @@ class MLRXApp(tk.Tk):
                 messagebox.showerror("Results error", f"Unable to load results:\n{exc}")
                 return
 
-            if training_df.empty:
-                messagebox.showerror(
-                    "Results error", "The selected file does not contain training results."
-                )
-                return
-
             self.full_results_df = training_df
             self.last_results_df = training_df
             self.full_internal_results = [dict(row) for row in internal_results or []]
             self.full_external_results = [dict(row) for row in external_results or []]
             self.results_export_path = path
+
+            if training_df.empty:
+                self._append_log(
+                    "No training models were found in the selected results file.\n"
+                )
 
             metadata_models_found = self._safe_int(metadata.get("models_found"))
             if metadata_models_found is None:
@@ -6104,12 +6243,6 @@ class MLRXApp(tk.Tk):
             meta["test_ids"] = self._normalize_id_iterable(
                 split_settings.get("test_ids")
             )
-        elif mode == "external":
-            meta["external_path"] = split_settings.get("external_path", "")
-            ext_delimiter = self._normalize_delimiter_value(
-                split_settings.get("external_delimiter", ";")
-            )
-            meta["external_delimiter"] = self._serialize_delimiter_value(ext_delimiter)
 
         return meta
 
@@ -6130,15 +6263,6 @@ class MLRXApp(tk.Tk):
             train_ids = set(MLRXApp._normalize_id_iterable(meta_split.get("train_ids")))
             test_ids = set(MLRXApp._normalize_id_iterable(meta_split.get("test_ids")))
             return {"mode": "manual", "train_ids": train_ids, "test_ids": test_ids}
-        if mode == "external":
-            delimiter = MLRXApp._normalize_delimiter_value(
-                meta_split.get("external_delimiter")
-            )
-            return {
-                "mode": "external",
-                "external_path": meta_split.get("external_path", ""),
-                "external_delimiter": delimiter or ";",
-            }
         return {"mode": "none"}
 
     def _sanitize_kfold_metadata(self, meta: Optional[dict]) -> dict:
@@ -6231,6 +6355,9 @@ class MLRXApp(tk.Tk):
         models_found: Optional[int] = None,
         models_reported: Optional[int] = None,
         models_explored: Optional[int] = None,
+        *,
+        avg_iterations_per_seed: Optional[object] = None,
+        max_iterations_per_seed: Optional[object] = None,
     ) -> dict:
         delimiter_value = self._normalize_delimiter_value(config.delimiter)
 
@@ -6242,10 +6369,9 @@ class MLRXApp(tk.Tk):
             "non_variable": config.non_variable_spec,
             "exclude_constant": bool(config.exclude_constant),
             "constant_threshold": float(config.constant_threshold),
-            "excluded_observations": config.excluded_observations,
+            "excluded_observations": (config.excluded_observations or "").strip() or "none",
             "target_metric": config.target_metric,
             "top_models": int(config.export_limit),
-            "settings_keys": "#".join(SETTINGS_NUMERIC_KEYS),
             "method": config.method,
             "cov_type": getattr(config, "cov_type", COVARIANCE_DEFAULT_KEY),
             "iterations_mode": getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
@@ -6259,8 +6385,13 @@ class MLRXApp(tk.Tk):
         metadata["split"] = self._metadata_from_split_settings(split_settings)
 
         max_iterations = getattr(config, "max_iterations_per_seed", None)
-        metadata["max_iterations_per_seed"] = (
-            None if max_iterations is None else self._format_numeric_value(max_iterations)
+        metadata["max_iterations_per_seed"] = _resolve_iterations_metadata_value(
+            getattr(config, "method", "eprs"),
+            getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
+            max_iterations,
+            avg_iterations_per_seed,
+            max_iterations_per_seed,
+            formatter=self._format_numeric_value,
         )
 
         clip = config.clip_predictions
@@ -6314,11 +6445,15 @@ class MLRXApp(tk.Tk):
                 self.summary_tab.get_models_found(),
                 self.summary_tab.get_models_reported(),
                 self.summary_tab.get_models_explored(),
+                avg_iterations_per_seed=self.summary_tab.get_avg_iterations_per_seed(),
+                max_iterations_per_seed=self.summary_tab.get_max_iterations_per_seed(),
             )
         else:
             metadata = dict(self.last_results_metadata or {})
             metadata.setdefault("version", METADATA_VERSION)
-            metadata.setdefault("excluded_observations", self.exclude_obs_var.get().strip())
+            metadata.setdefault(
+                "excluded_observations", (self.exclude_obs_var.get().strip() or "none")
+            )
             if "method" not in metadata:
                 metadata["method"] = "eprs"
 
@@ -6338,21 +6473,7 @@ class MLRXApp(tk.Tk):
         if models_explored_value is not None:
             metadata["models_explored"] = models_explored_value
 
-        avg_iters_value = None
-        if hasattr(self, "summary_tab"):
-            avg_iters_value = self.summary_tab.get_avg_iterations_per_seed()
-        if avg_iters_value is None:
-            avg_iters_value = metadata.get("avg_iterations_per_seed")
-        if avg_iters_value is not None:
-            metadata["avg_iterations_per_seed"] = avg_iters_value
-
-        max_iters_value = None
-        if hasattr(self, "summary_tab"):
-            max_iters_value = self.summary_tab.get_max_iterations_per_seed()
-        if max_iters_value is None:
-            max_iters_value = metadata.get("max_r2_calls")
-        if max_iters_value is not None:
-            metadata["max_r2_calls"] = max_iters_value
+        metadata.pop("max_r2_calls", None)
 
         delimiter_value = self._normalize_delimiter_value(metadata.get("delimiter"))
         metadata["delimiter"] = (
@@ -6366,19 +6487,6 @@ class MLRXApp(tk.Tk):
             split_meta["external_delimiter"] = (
                 self._serialize_delimiter_value(normalized) if normalized else ""
             )
-
-        metadata["validation_csv"] = self.external_test_path.get().strip()
-        try:
-            validation_delim = self._get_delimiter(self.external_delimiter_var.get())
-        except Exception:  # noqa: BLE001
-            validation_delim = self._normalize_delimiter_value(
-                metadata.get("validation_delimiter")
-            )
-        metadata["validation_delimiter"] = (
-            self._serialize_delimiter_value(validation_delim)
-            if validation_delim
-            else ""
-        )
 
         # Ensure newly added dataset/settings options are mirrored in the metadata so
         # restored sessions match the current UI configuration even when the config
@@ -6405,9 +6513,11 @@ class MLRXApp(tk.Tk):
         metadata["constant_threshold"] = float(threshold)
 
         try:
-            metadata["excluded_observations"] = self._get_excluded_observations_text()
+            metadata["excluded_observations"] = (
+                self._get_excluded_observations_text() or "none"
+            )
         except Exception:  # noqa: BLE001
-            metadata["excluded_observations"] = self.exclude_obs_var.get().strip()
+            metadata["excluded_observations"] = self.exclude_obs_var.get().strip() or "none"
 
         display_metric = self.target_metric_choice.get()
         metric_key = TARGET_METRIC_DISPLAY_TO_KEY.get(display_metric)
@@ -6460,6 +6570,9 @@ class MLRXApp(tk.Tk):
             metadata.pop("cpu_time_total_minutes", None)
             metadata.pop("cpu_time_total_seconds", None)
 
+        if metadata.get("max_iterations_per_seed") in {None, ""}:
+            metadata["max_iterations_per_seed"] = "none"
+
         return metadata
 
     def _read_results_file(
@@ -6474,6 +6587,7 @@ class MLRXApp(tk.Tk):
         inline_metadata_detected = False
         inline_delimiter: Optional[str] = None
         inline_column_count: Optional[int] = None
+        inline_metadata_fields: int = 0
 
         with path.open("r", encoding="utf-8") as handle:
             for line in handle:
@@ -6491,9 +6605,31 @@ class MLRXApp(tk.Tk):
                     candidates = list(DELIMITER_NAME_TO_VALUE.values())
                     if ";" not in candidates:
                         candidates.append(";")
-                    metadata_label_lower = METADATA_HEADER_LABEL.strip().lower()
                     for delimiter in candidates:
                         header_values = _split_csv_line(header_line, delimiter)
+                        metadata_candidate = _deserialize_metadata(header_values[-1])
+                        if metadata_candidate:
+                            inline_metadata_detected = True
+                            inline_delimiter = delimiter
+                            inline_column_count = len(header_values) - 1
+                            inline_metadata_fields = 1
+                            metadata = metadata_candidate
+                            sanitized_header = _join_csv_line(header_values[:-1], delimiter)
+                            line = sanitized_header + "\n"
+                            break
+
+                        metadata_candidate = _deserialize_metadata(header_values[-2]) if len(header_values) >= 2 else {}
+                        if metadata_candidate and header_values[-1].strip() == "#":
+                            inline_metadata_detected = True
+                            inline_delimiter = delimiter
+                            inline_column_count = len(header_values) - 2
+                            inline_metadata_fields = 2
+                            metadata = metadata_candidate
+                            sanitized_header = _join_csv_line(header_values[:-2], delimiter)
+                            line = sanitized_header + "\n"
+                            break
+
+                        metadata_label_lower = METADATA_HEADER_LABEL.strip().lower()
                         if (
                             len(header_values) >= 2
                             and header_values[-2].strip().lower() == metadata_label_lower
@@ -6501,6 +6637,7 @@ class MLRXApp(tk.Tk):
                             inline_metadata_detected = True
                             inline_delimiter = delimiter
                             inline_column_count = len(header_values) - 2
+                            inline_metadata_fields = 2
                             metadata_candidate = _deserialize_metadata(header_values[-1])
                             if metadata_candidate:
                                 metadata = metadata_candidate
@@ -6512,8 +6649,10 @@ class MLRXApp(tk.Tk):
                     raw_line = line.rstrip("\n\r")
                     if raw_line:
                         row_values = _split_csv_line(raw_line, inline_delimiter)
-                        if inline_column_count is None or len(row_values) >= inline_column_count + 2:
-                            sanitized_row = _join_csv_line(row_values[:-2], inline_delimiter)
+                        if inline_metadata_fields == 0:
+                            sanitized_row = raw_line
+                        elif inline_column_count is None or len(row_values) >= inline_column_count + inline_metadata_fields:
+                            sanitized_row = _join_csv_line(row_values[:-inline_metadata_fields], inline_delimiter)
                             line = sanitized_row + "\n"
 
                 data_lines.append(line)
@@ -6527,9 +6666,6 @@ class MLRXApp(tk.Tk):
         except Exception:  # noqa: BLE001
             buffer.seek(0)
             df = pd.read_csv(buffer)
-
-        if df.empty:
-            raise ValueError("The selected file does not contain any rows.")
 
         df = df.copy()
         metadata_column: Optional[str] = None
@@ -6562,9 +6698,6 @@ class MLRXApp(tk.Tk):
             training_raw = df.copy()
             internal_source = df.copy()
             external_source = df.copy()
-
-        if training_raw.empty:
-            raise ValueError("No training results were found in the selected file.")
 
         required_columns = {"Model", "Variables", "R2"}
         missing_columns = [col for col in required_columns if col not in training_raw.columns]
@@ -6735,12 +6868,9 @@ class MLRXApp(tk.Tk):
                 self.iterations_mode_var.get(), manual_iterations_value
             )
 
-        avg_iters = metadata.get("avg_iterations_per_seed")
-        if avg_iters is None:
-            avg_iters = metadata.get("avg_r2_calls")
-        self.summary_tab.update_avg_iterations_per_seed(avg_iters)
-
-        self.summary_tab.update_max_iterations_per_seed(metadata.get("max_r2_calls"))
+        self.summary_tab.update_max_iterations_per_seed(
+            metadata.get("max_iterations_per_seed")
+        )
 
         cov_key = metadata.get("cov_type")
         if isinstance(cov_key, str):
@@ -6749,14 +6879,9 @@ class MLRXApp(tk.Tk):
             if display_value:
                 self.cov_type_var.set(display_value)
 
-        keys_str = metadata.get("settings_keys")
         values_str = metadata.get("settings_values")
         if values_str:
-            keys = (
-                keys_str.split("#")
-                if isinstance(keys_str, str) and keys_str
-                else list(SETTINGS_NUMERIC_KEYS)
-            )
+            keys = list(SETTINGS_NUMERIC_KEYS)
             values = values_str.split("#")
             for key, value in zip(keys, values):
                 if key not in self.params_vars:
@@ -6818,27 +6943,12 @@ class MLRXApp(tk.Tk):
                 test_text = self._ids_to_text(split_meta.get("test_ids"))
             self.manual_train_ids.set(train_text)
             self.manual_test_ids.set(test_text)
-        elif mode == "external" and isinstance(split_meta, dict):
-            external_path = split_meta.get("external_path", "")
-            self.external_test_path.set(str(external_path))
-            ext_delim_value = self._normalize_delimiter_value(
-                split_meta.get("external_delimiter")
-            )
-            if ext_delim_value:
-                self.external_delimiter_var.set(
-                    self._delimiter_to_ui(ext_delim_value)
-                )
-
-        validation_csv = metadata.get("validation_csv")
-        if validation_csv is not None:
-            self.external_test_path.set(str(validation_csv))
-        validation_delim = self._normalize_delimiter_value(
-            metadata.get("validation_delimiter")
-        )
-        if validation_delim:
-            self.external_delimiter_var.set(self._delimiter_to_ui(validation_delim))
 
         sanitized_metadata = dict(metadata)
+        sanitized_metadata.pop("settings_keys", None)
+        sanitized_metadata.pop("avg_iterations_per_seed", None)
+        sanitized_metadata.pop("validation_csv", None)
+        sanitized_metadata.pop("validation_delimiter", None)
         models_found_value = self._safe_int(metadata.get("models_found"))
         if models_found_value is not None:
             sanitized_metadata["models_found"] = models_found_value
@@ -6856,11 +6966,6 @@ class MLRXApp(tk.Tk):
                     else ""
                 )
             sanitized_metadata["split"] = sanitized_split
-        sanitized_metadata["validation_delimiter"] = (
-            self._serialize_delimiter_value(validation_delim)
-            if validation_delim
-            else ""
-        )
 
         kfold_info = self._apply_kfold_metadata(metadata.get("kfold"))
         sanitized_metadata["kfold"] = kfold_info
@@ -6965,6 +7070,21 @@ class MLRXApp(tk.Tk):
                 "R2_adj": self._safe_float(row.get("R2_adj")),
                 "VIF_max": self._safe_float(row.get("VIF_max")),
                 "VIF_avg": self._safe_float(row.get("VIF_avg")),
+                "R2_loo": self._safe_float(row.get("R2_loo")),
+                "RMSE_loo": self._safe_float(row.get("RMSE_loo")),
+                "s_loo": self._safe_float(row.get("s_loo")),
+                "MAE_loo": self._safe_float(row.get("MAE_loo")),
+                "R2_kfold": self._safe_float(row.get("R2_kfold")),
+                "RMSE_kfold": self._safe_float(row.get("RMSE_kfold")),
+                "s_kfold": self._safe_float(row.get("s_kfold")),
+                "MAE_kfold": self._safe_float(row.get("MAE_kfold")),
+                "R2_ext": self._safe_float(row.get("R2_ext")),
+                "Q2F1_ext": self._safe_float(row.get("Q2F1_ext")),
+                "Q2F2_ext": self._safe_float(row.get("Q2F2_ext")),
+                "Q2F3_ext": self._safe_float(row.get("Q2F3_ext")),
+                "RMSE_ext": self._safe_float(row.get("RMSE_ext")),
+                "s_ext": self._safe_float(row.get("s_ext")),
+                "MAE_ext": self._safe_float(row.get("MAE_ext")),
             }
 
             internal_row = internal_map.get(model_value)
@@ -7105,17 +7225,6 @@ class MLRXApp(tk.Tk):
             except ValueError as exc:  # noqa: BLE001
                 raise ValueError(f"Manual split: {exc}") from exc
             return {"mode": "manual", "train_ids": train_ids, "test_ids": test_ids}
-
-        if mode == "external":
-            path = self.external_test_path.get().strip()
-            if not path:
-                raise ValueError("External split: please select a testing CSV file.")
-            delimiter = self._get_delimiter(self.external_delimiter_var.get())
-            return {
-                "mode": "external",
-                "external_path": path,
-                "external_delimiter": delimiter,
-            }
 
         raise ValueError("Unknown split mode selected.")
 
@@ -7414,7 +7523,7 @@ class MLRXApp(tk.Tk):
         self._update_progress(
             self.total_seeds, self.total_seeds, stage=self.progress_total_steps
         )
-        self.status_var.set("Completed")
+        self.status_var.set("Finished")
         self._set_holdout_ready(self._context_has_holdout(self.last_context))
 
         cpu_search = float(result.get("cpu_time_search", 0.0))
@@ -7434,14 +7543,20 @@ class MLRXApp(tk.Tk):
         self.summary_tab.update_models_reported(models_reported)
         self.summary_tab.update_models_explored(result.get("models_explored"))
         threshold_display = "-"
+        metric_label = TARGET_METRIC_DISPLAY.get(
+            getattr(self.last_config, "target_metric", None), R_SQUARED_SYMBOL
+        )
+        comparator = ">="
         if self.last_config is not None:
-            threshold_value = getattr(self.last_config, "report_r2_threshold", None)
+            threshold_value = getattr(self.last_config, "tm_cutoff", None)
             if threshold_value is not None:
                 threshold_display = f"{threshold_value:.2f}"
+            if getattr(self.last_config, "target_metric", None) == "RMSE_loo":
+                comparator = "<="
         summary_lines = [
             "Analysis complete.",
             f"Total models explored: {result.get('models_explored', 0)}",
-            f"Models with {R_SQUARED_SYMBOL} >= {threshold_display}: {result['models_found']}",
+            f"Models with {metric_label} {comparator} {threshold_display}: {result['models_found']}",
             (
                 "Filtrated and reported models: "
                 f"{len(results_df.index) if results_df is not None else 0}"
@@ -7473,23 +7588,8 @@ class MLRXApp(tk.Tk):
                     result.get("models_found"),
                     models_reported,
                     result.get("models_explored"),
-                )
-                metadata_seed["avg_iterations_per_seed"] = (
-                    self.summary_tab.get_avg_iterations_per_seed()
-                )
-                metadata_seed["validation_csv"] = self.external_test_path.get().strip()
-                try:
-                    validation_delim = self._get_delimiter(
-                        self.external_delimiter_var.get()
-                    )
-                except Exception:  # noqa: BLE001
-                    validation_delim = self._normalize_delimiter_value(
-                        metadata_seed.get("validation_delimiter")
-                    )
-                metadata_seed["validation_delimiter"] = (
-                    self._serialize_delimiter_value(validation_delim)
-                    if validation_delim
-                    else ""
+                    avg_iterations_per_seed=result.get("avg_r2_calls"),
+                    max_iterations_per_seed=result.get("max_r2_calls"),
                 )
                 self.last_results_metadata = metadata_seed
             export_path = self._export_results_to_csv()
@@ -8071,18 +8171,19 @@ class MLRXApp(tk.Tk):
             return df
 
         metric_label = self.results_sort_var.get()
-        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label, "R2")
-        ascending_metrics = {"RMSE", "s", "MAE", "N var", "VIF max", "VIF avg"}
+        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label) or RESULTS_SORT_LEGACY_DISPLAY_TO_KEY.get(metric_label, "R2")
+        ascending_metrics = {"RMSE", "s", "MAE", "N var", "VIFmax", "VIFavg"}
 
         column_map = {
             "R2": "R2",
+            "adj-R2": "R2_adj",
             "R2 adj": "R2_adj",
             "RMSE": "RMSE",
             "s": "s",
             "MAE": "MAE",
             "N var": "N_var",
-            "VIF max": "VIF_max",
-            "VIF avg": "VIF_avg",
+            "VIFmax": "VIF_max",
+            "VIFavg": "VIF_avg",
         }
         sort_column = column_map.get(metric, "R2")
         ascending = metric in ascending_metrics
@@ -8207,9 +8308,9 @@ class MLRXApp(tk.Tk):
             return []
 
         metric_label = self.results_sort_var.get()
-        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label, "R2")
+        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label) or RESULTS_SORT_LEGACY_DISPLAY_TO_KEY.get(metric_label, "R2")
         allowed_metrics = {"R2", "RMSE", "s", "MAE", "N var", "Q2F2", "Q2F1"}
-        training_order_metrics = {"VIF max", "VIF avg"}
+        training_order_metrics = {"VIFmax", "VIFavg"}
 
         if metric in training_order_metrics:
             return self._sort_results_by_training_order(
@@ -8312,9 +8413,9 @@ class MLRXApp(tk.Tk):
             return []
 
         metric_label = self.results_sort_var.get()
-        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label, "R2")
+        metric = RESULTS_SORT_DISPLAY_TO_KEY.get(metric_label) or RESULTS_SORT_LEGACY_DISPLAY_TO_KEY.get(metric_label, "R2")
         allowed_metrics = {"R2", "RMSE", "s", "MAE", "N var", "Q2F2", "Q2F1"}
-        training_order_metrics = {"VIF max", "VIF avg"}
+        training_order_metrics = {"VIFmax", "VIFavg"}
 
         if metric in training_order_metrics:
             return self._sort_results_by_training_order(
@@ -8476,7 +8577,7 @@ class MLRXApp(tk.Tk):
         if percent == 100:
             self._mark_progress_step_complete(stage)
             if stage >= self.progress_total_steps:
-                self.status_var.set("Completed")
+                self.status_var.set("Finished")
             elif self.current_progress_stage == stage:
                 next_stage = min(stage + 1, self.progress_total_steps)
                 self.status_var.set(self._format_running_status(next_stage))
@@ -8558,7 +8659,10 @@ class MLRXApp(tk.Tk):
                 f"Significance level: {config.signif_lvl:.4f}",
                 f"Correlation threshold: {config.corr_threshold:.2f}",
                 f"VIF threshold: {config.vif_threshold:.2f}",
-                f"Reporting {R_SQUARED_SYMBOL} threshold: {config.report_r2_threshold:.2f}",
+                "Reporting "
+                + TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric)
+                + " cutoff: "
+                + _format_threshold_display(getattr(config, "tm_cutoff", None)),
                 f"Parallel jobs: {config.n_jobs}",
             ]
         )
@@ -8594,13 +8698,6 @@ class MLRXApp(tk.Tk):
                 lines.append(f"  Train IDs preview: {_preview_ids(train_ids)}")
             if test_ids:
                 lines.append(f"  Test IDs preview: {_preview_ids(test_ids)}")
-        elif split_mode == "external":
-            external_path = split_settings.get("external_path", "")
-            ext_delim = split_settings.get("external_delimiter", ",")
-            ext_display = "\\t" if ext_delim == "\t" else ext_delim
-            lines.append("Split mode: External dataset")
-            lines.append(f"  External dataset: {external_path}")
-            lines.append(f"  External delimiter: {ext_display}")
         else:
             lines.append(f"Split mode: {split_mode}")
 
@@ -8691,6 +8788,23 @@ class MLRXApp(tk.Tk):
             params["target_metric"] = TARGET_METRIC_DISPLAY_TO_KEY[target_display]
         except KeyError as exc:  # noqa: B904
             raise ValueError("Please select a valid target metric.") from exc
+
+        threshold_value = params.get("tm_cutoff", defaults.tm_cutoff)
+        if isinstance(threshold_value, str) and threshold_value.strip().lower() == "none":
+            params["tm_cutoff"] = None
+        else:
+            if threshold_value in ("", None):
+                if allow_defaults:
+                    threshold_value = defaults.tm_cutoff
+                else:
+                    raise ValueError("Target metric cutoff is required.")
+            try:
+                threshold_float = float(threshold_value)
+            except (TypeError, ValueError) as exc:  # noqa: BLE001
+                raise ValueError("Target metric cutoff must be a number.") from exc
+            if params["target_metric"] == "RMSE_loo" and threshold_float <= 0:
+                raise ValueError("Target metric cutoff must be greater than zero for RMSE (LOO).")
+            params["tm_cutoff"] = threshold_float
 
         export_limit = params.get("export_limit", 0)
         if export_limit in ("", None):
@@ -8823,7 +8937,7 @@ class MLRXApp(tk.Tk):
         self.params_vars["signif_lvl"].set(config.signif_lvl)
         self.params_vars["corr_threshold"].set(config.corr_threshold)
         self.params_vars["vif_threshold"].set(config.vif_threshold)
-        self.params_vars["report_r2_threshold"].set(config.report_r2_threshold)
+        self.params_vars["tm_cutoff"].set(config.tm_cutoff)
         self.params_vars["export_limit"].set(config.export_limit)
         self.params_vars["n_jobs"].set(config.n_jobs)
 
@@ -8874,11 +8988,6 @@ class MLRXApp(tk.Tk):
         elif mode == "manual":
             self.manual_train_ids.set(self._ids_to_text(split_meta.get("train_ids")))
             self.manual_test_ids.set(self._ids_to_text(split_meta.get("test_ids")))
-        elif mode == "external":
-            self.external_test_path.set(str(split_meta.get("external_path", "")))
-            ext_delim = split_meta.get("external_delimiter")
-            if ext_delim:
-                self.external_delimiter_var.set(self._delimiter_to_ui(ext_delim))
 
         self.last_split_settings = split_settings
 
@@ -8957,6 +9066,7 @@ class ValidationTab(ttk.Frame):
         self.selection_buttons: list[ttk.Radiobutton] = []
         self.available = False
         self.pending_context = False
+        self.external_disabled_by_split = False
 
         self._build_ui()
         self.set_available(False)
@@ -9162,9 +9272,7 @@ class ValidationTab(ttk.Frame):
             btn.configure(state=state)
         if enabled:
             self.internal_button.configure(state="normal")
-            self.external_button.configure(state="normal")
             self.internal_status_var.set("Ready")
-            self.external_status_var.set("Ready")
         else:
             self.internal_button.configure(state="disabled")
             self.external_button.configure(state="disabled")
@@ -9174,6 +9282,7 @@ class ValidationTab(ttk.Frame):
             self.multiple_entry.configure(state="disabled")
         self._update_selection_controls()
         self._update_method_controls()
+        self.sync_split_mode(self.master_app.split_mode.get())
 
     def update_iteration_preferences(
         self, mode: Optional[str], manual_value: Optional[object]
@@ -9216,10 +9325,23 @@ class ValidationTab(ttk.Frame):
         self.kfold_repeats_entry.configure(state=entry_state)
 
     def sync_split_mode(self, mode: str):
-        del mode
-        self.dataset_entry.configure(state="normal")
-        self.dataset_browse.configure(state="normal")
-        self.delimiter_box.configure(state="readonly")
+        disabled = mode in {"random", "manual"}
+        self.external_disabled_by_split = disabled
+        entry_state = "disabled" if disabled else "normal"
+        delimiter_state = "disabled" if disabled else "readonly"
+        button_state = "disabled" if (disabled or not self.available) else "normal"
+
+        self.dataset_entry.configure(state=entry_state)
+        self.dataset_browse.configure(state=entry_state)
+        self.delimiter_box.configure(state=delimiter_state)
+        self.external_button.configure(state=button_state)
+
+        if disabled:
+            self.external_status_var.set("External dataset disabled by split")
+        elif not self.available:
+            self.external_status_var.set("Awaiting analysis")
+        else:
+            self.external_status_var.set("Ready")
 
     def _browse_dataset(self):
         path = filedialog.askopenfilename(
@@ -9613,42 +9735,9 @@ class ValidationTab(ttk.Frame):
         if self.context is None:
             raise ValueError("No dataset is available for internal validation.")
 
-        X = take(self.context, variables)
-        y = self.context.y_np.astype(float)
-        n_samples = y.shape[0]
-        if n_samples <= X.shape[1]:
-            raise ValueError("LOO: samples must exceed the number of variables.")
-
-        design = np.c_[np.ones(n_samples), X]
-        xtx = design.T @ design
-        try:
-            xtx_inv = np.linalg.inv(xtx)
-        except np.linalg.LinAlgError:
-            raise ValueError("LOO: design matrix is singular.") from None
-
-        xty = design.T @ y
-        coefficients = xtx_inv @ xty
-        fitted = design @ coefficients
-        residuals = y - fitted
-        hat_diag = np.sum(design * (design @ xtx_inv), axis=1)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            loo_pred = y - residuals / (1 - hat_diag)
-        loo_pred = self._clip_predictions(loo_pred)
-        loo_residuals = y - loo_pred
-
-        mse = float(np.mean(loo_residuals**2))
-        rmse = float(np.sqrt(mse))
-        mae = float(np.mean(np.abs(loo_residuals)))
-        ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-        ss_res = float(np.sum(loo_residuals**2))
-        r2 = 1.0 - ss_res / ss_tot if ss_tot else float("nan")
-        param_count = len(variables) + 1
-        return {
-            "R2_loo": r2,
-            "RMSE_loo": rmse,
-            "s_loo": _compute_standard_error(loo_residuals, param_count),
-            "MAE_loo": mae,
-        }
+        return _evaluate_model_loo(
+            self.context, variables, getattr(self.config, "clip_predictions", None)
+        )
 
     def _evaluate_model_kfold(
         self, variables: list[str], folds: int, repeats: int
@@ -9853,7 +9942,7 @@ class SummaryTab(ttk.Frame):
         ("Used target metric", "target_metric"),
         ("Total models explored", "models_explored"),
         (
-            f"Models with {R_SQUARED_SYMBOL} >= {{report_r2_threshold}}",
+            f"Models with {R_SQUARED_SYMBOL} >= {{tm_cutoff}}",
             "models_found",
         ),
         ("Filtrated and reported models", "models_reported"),
@@ -9887,12 +9976,12 @@ class SummaryTab(ttk.Frame):
 
     TRAINING_LABELS: dict[str, str] = {
         "R2": f"{R_SQUARED_SYMBOL} (train)",
-        "R2_adj": f"{R_SQUARED_SYMBOL} adj",
+        "R2_adj": f"adj-{R_SQUARED_SYMBOL} (train)",
         "RMSE": "RMSE (train)",
         "MAE": "MAE (train)",
         "s": f"{STANDARD_ERROR_SYMBOL} (train)",
-        "VIF_max": "VIF max",
-        "VIF_avg": "VIF avg",
+        "VIF_max": "VIFmax",
+        "VIF_avg": "VIFavg",
         "r_max": "|r|max",
     }
 
@@ -9927,9 +10016,9 @@ class SummaryTab(ttk.Frame):
     )
 
     EXTERNAL_LABELS: dict[str, str] = {
-        "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F1",
-        "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F2 ({R_SQUARED_SYMBOL} ext)",
-        "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F3",
+        "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F?",
+        "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F?",
+        "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F?",
         "RMSE_ext": "RMSE (ext)",
         "MAE_ext": "MAE (ext)",
     }
@@ -10609,13 +10698,13 @@ class SummaryTab(ttk.Frame):
 
     def _format_r2_threshold(self, value: object) -> str:
         if value is None:
-            return "-"
+            return "none"
         try:
             numeric = float(value)
         except (TypeError, ValueError):
-            return "-"
+            return "none"
         if not np.isfinite(numeric):
-            return "-"
+            return "none"
         return f"{numeric:.2f}"
 
     def _format_p_value(self, value: object) -> str:
@@ -10737,11 +10826,9 @@ class SummaryTab(ttk.Frame):
                 return f"{formatted} (Mode: Manual)"
             return None
 
-        auto_limit = None
-        if self.config is not None:
-            auto_limit = getattr(self.config, "max_r2_calls", None)
+        auto_limit = getattr(self, "_max_iterations_per_seed", None)
         if auto_limit is None:
-            auto_limit = getattr(self, "_max_iterations_per_seed", None)
+            auto_limit = config_value
         if auto_limit is not None:
             formatted = self._format_count(auto_limit)
             return f"{formatted} (Mode: Auto)"
@@ -11242,12 +11329,12 @@ class SummaryTab(ttk.Frame):
                 metric_label = self._resolve_target_metric_label()
                 threshold_display = "-"
                 if self.config is not None:
-                    threshold = getattr(self.config, "report_r2_threshold", None)
+                    threshold = getattr(self.config, "tm_cutoff", None)
                     if threshold is not None:
                         threshold_display = self._format_r2_threshold(threshold)
                 display_label = (
                     label.replace("{metric target}", metric_label).replace(
-                        "{report_r2_threshold}", threshold_display
+                        "{tm_cutoff}", threshold_display
                     )
                 )
             if key == "predictors" and selected_model_id is not None:
@@ -11752,7 +11839,7 @@ class SummaryTab(ttk.Frame):
             ("\U0001D461", "t-statistic for the coefficient", "\U0001D461"),
             ("\U0001D45D", "Two-tailed p-value for the coefficient", "\U0001D45D"),
             ("R²", "Coefficient of determination", "R²"),
-            ("R² adj", "Adjusted coefficient of determination", "R² adj"),
+            ("adj-R²", "Adjusted coefficient of determination", "adj-R²"),
             (
                 f"{Q_SQUARED_SYMBOL}F1",
                 "External predictive ability (F1, centered on the training mean)",
@@ -11775,7 +11862,11 @@ class SummaryTab(ttk.Frame):
                 "Residual standard error",
                 STANDARD_ERROR_SYMBOL,
             ),
-            ("VIF", "Variance inflation factor", "VIF"),
+            (
+                "VIFmax/avg",
+                "Maximum and average variance inflation factor",
+                "VIFmax",
+            ),
             ("|r|max", "Maximum absolute correlation among predictors", "|r|max"),
             ("LOO", "Leave-one-out cross-validation", "LOO"),
             ("k-fold", "k-fold cross-validation", "k-fold"),
@@ -15843,8 +15934,8 @@ class VisualizationTab(ttk.Frame):
         ("Correlation heatmap (with dependent)", "correlation_heatmap_with_target"),
         ("Predicted vs Actual", "exp_vs_pred"),
         ("Predicted vs Actual by LOO", "exp_vs_pred_loo"),
-        ("Residual vs Actual", "exp_vs_resid"),
-        ("Residual vs Actual by LOO", "exp_vs_resid_loo"),
+        ("Residuals vs Actual", "exp_vs_resid"),
+        ("Residuals vs Actual by LOO", "exp_vs_resid_loo"),
         ("Residuals vs Predictions", "resid_vs_pred"),
         ("Residuals vs Predictions by LOO", "resid_vs_pred_loo"),
         ("Scale-Location", "scale_location"),
@@ -15872,8 +15963,8 @@ class VisualizationTab(ttk.Frame):
         "correlation_heatmap_with_target": "Correlation heatmap (with dependent)",
         "exp_vs_pred": "Predicted vs Actual",
         "exp_vs_pred_loo": "Predicted vs Actual by LOO",
-        "exp_vs_resid": "Residual vs Actual",
-        "exp_vs_resid_loo": "Residual vs Actual by LOO",
+        "exp_vs_resid": "Residuals vs Actual",
+        "exp_vs_resid_loo": "Residuals vs Actual by LOO",
         "resid_vs_pred": "Residuals vs Predictions",
         "resid_vs_pred_loo": "Residuals vs Predictions by LOO",
         "scale_location": "Scale-Location",
@@ -19537,7 +19628,7 @@ class VisualizationTab(ttk.Frame):
             )
             self._result = self.parent_tab._store_y_randomization_result(result)
             p_text = f"{p_value:.4f}" if np.isfinite(p_value) else "n/a"
-            self.status_var.set(f"Status: Completed. p-value = {p_text}. Interpretation: {interpretation}")
+            self.status_var.set(f"Status: Finished. p-value = {p_text}. Interpretation: {interpretation}")
             self.add_chart_button.configure(state="normal")
             self.export_button.configure(state="normal")
             self._cancel_event.clear()
