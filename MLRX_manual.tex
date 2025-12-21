@@ -73,7 +73,7 @@
 
 % =========================================================
 \section{Overview}
-MLR-X is a cross-platform application for designing, fitting, and assessing multiple linear regression models on datasets that range from small matrices to high-dimensional tables. The software combines a graphical interface with optional CLI execution, supports both heuristic and exhaustive model searches, and delivers synchronized validation, diagnostics, visualization, and reporting outputs in portable CSV and document formats.
+MLR-X is a cross-platform application for designing, fitting, and assessing multiple linear regression models on datasets that range from small matrices to high-dimensional tables. The software combines a graphical user interface (GUI) with optional command line interface (CLI) execution, supports both heuristic and exhaustive model searches, and delivers synchronized validation, diagnostics, visualization, and reporting outputs in portable CSV and document formats.
 
 % =========================================================
 \section{Distribution Packages}
@@ -91,24 +91,24 @@ Packages are portable and do not require external Python installations or scient
 \subsubsection{GUI-Only Versions}
 \begin{itemize}
   \item Launch only the graphical user interface
-  \item No terminal/console window displayed
-  \item Available for: macOS (.app), Windows (.exe)
+  \item Do not display a terminal or console window
+  \item Available for macOS (.app) and Windows (.exe)
 \end{itemize}
 
 \subsubsection{GUI+CLI Versions}
 \begin{itemize}
-  \item Launch both graphical interface AND terminal/console
+  \item Launch both the graphical interface and a terminal or console
   \item Allow simultaneous GUI and command-line interaction
-  \item Terminal remains open for CLI commands alongside GUI
-  \item Available for: macOS (.app), Windows (.exe)
+  \item Keep the terminal open for CLI commands alongside the GUI
+  \item Available for macOS (.app) and Windows (.exe)
 \end{itemize}
 
 \subsubsection{Linux Behavior}
 \begin{itemize}
-  \item Single binary supports both modes
-  \item GUI-only interface by default
-  \item CLI accessible via command-line arguments
-  \item No separate GUI+CLI variant needed
+  \item A single binary supports both modes
+  \item Launches the GUI-only mode by default
+  \item Provides CLI access via command-line arguments
+  \item Does not require a separate GUI+CLI variant
 \end{itemize}
 
 \medskip
@@ -140,18 +140,18 @@ sudo mkdir -p /opt/MLRX/icon
 sudo cp icon/icon.ico /opt/MLRX/
 \end{lstlisting}
 
-    \item Optionally add the installation directory to the \texttt{PATH} (recommended for CLI usage).
+    \item (Optional) Add the installation directory to the \texttt{PATH} (recommended for CLI usage).
 \begin{lstlisting}[style=mlrx]
 # For the current session
 export PATH=/opt/MLRX:$PATH
 
-# To persist (choose one, depending on your shell)
+# Make permanent (choose one, depending on your shell)
 echo 'export PATH=/opt/MLRX:$PATH' >> ~/.bashrc
 # or
 echo 'export PATH=/opt/MLRX:$PATH' >> ~/.zshrc
 \end{lstlisting}
 
-    \item (Optional) Register a desktop launcher (GNOME/KDE). If the package includes \texttt{MLRX.desktop}, update its \texttt{Exec} and \texttt{Icon} fields to match the installation paths, then install it.
+    \item (Optional) Register a desktop launcher. The package includes \texttt{MLRX.desktop}. Update its \texttt{Exec} and \texttt{Icon} fields to match the installation paths (if necessary) using a text editor, then follow the next steps:
 \begin{lstlisting}[style=mlrx]
 chmod +x MLRX.desktop
 cp MLRX.desktop ~/.local/share/applications/
@@ -162,7 +162,7 @@ cp MLRX.desktop ~/.local/share/applications/
 update-desktop-database ~/.local/share/applications 2>/dev/null || true
 \end{lstlisting}
   \end{enumerate}
-  \item \textbf{Windows GUI}: download the GUI package, place \texttt{MLRX.exe} in a convenient folder, and run it directly.
+  \item \textbf{Windows GUI}: download the GUI package, place \texttt{MLRX.exe} in a preferred folder, and run it directly.
   \item \textbf{Windows GUI+CLI}: same as Windows GUI, with the Run CLI option enabled.
   \item \textbf{macOS GUI}: download the app bundle and run it from a preferred location (e.g., move it to \texttt{/Applications} if desired).
   \item \textbf{macOS GUI+CLI}: same as macOS GUI, with the Run CLI option enabled.
@@ -172,14 +172,14 @@ update-desktop-database ~/.local/share/applications 2>/dev/null || true
 The main window presents a tabbed workflow.
 
 \subsection{\textbf{Setup \& Run} tab}
-Organizes dataset loading, splitting, model-search settings, and run controls. A banner at the top of this tab tracks the active task and its progress, while the lower status bar mirrors the current action. Tabs become available automatically once their prerequisites are filled in.
+This tab manages datasets, model search settings, and execution. A progress bar tracks the active task, while a status bar shows current task status. Additional tabs become available automatically once their prerequisites are completed.
 \paragraph{Dataset}
 \begin{enumerate}[label=\arabic*.]
   \item Choose the CSV via the field or \emph{Browse} button.
   \item Set the delimiter (\verb|;| by default), target (dependent variable), and any non-predictor columns.
   \item Optionally exclude observations by ID or ranges (e.g., \texttt{3,9,4-8}).
   \item Enable \emph{Exclude nearly constant predictors} and provide the percentage threshold to drop near-zero-variance variables.
-  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the top-right corner; the active task shows in the lower-right footer.
+  \item Actions: \emph{Preview data}, \emph{Run analysis}, \emph{Cancel}. Status appears in the upper-right corner; the active task shows in the lower-right footer.
 \end{enumerate}
 
 \paragraph{Data splitting}
@@ -193,52 +193,53 @@ Selecting \emph{None} keeps external validation available later from the Validat
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
-    \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. EPR-S is an original method in this software (doi.org/xxxxx).
-    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence; can be lengthy).
-    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Target metric cutoff}, \emph{Top models to report}, and \emph{Parallel jobs}. \emph{Top models to report} caps the best-scoring models exported to CSV, diagnostics tables, visualizations, and summaries (default 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; the Target metric cutoff uses the training-set value of the selected objective as a gatekeeper even when optimizing alternative metrics.
-    \item Target metric and covariance: select \emph{R$^2$}, \emph{adj-R$^2$}, \emph{Q$^2$}, or \emph{RMSE (LOO)} as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3). Non-robust keeps the standard OLS covariance (assumes homoskedasticity). HC0 replaces constant error variance with squared residuals (White, 1980). HC1 applies a small-sample degrees-of-freedom adjustment to HC0. HC2 down-weights high-leverage observations using $1/(1-h_i)$. HC3 uses $1/(1-h_i)^2$ for a jackknife-like correction, offering the strongest finite-sample protection against leverage.
+    \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. For further details see section 6.
+    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence).
+    \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Target metric cutoff}, \emph{Top models to report}, and \emph{CPU cores to use} (for further details, see Section~10.1). \emph{Top models to report} defines the maximum number of top-performing models that are exported and used in CSV files, diagnostic tables, visualizations, and summaries (default: 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; the Target metric cutoff uses the training-set value of the selected objective as a gatekeeper even when optimizing alternative metrics.
+    \item Target metric and covariance: select R$^2$, adj-R$^2$, Q$^2$ (LOO), or RMSE (LOO) as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3), for further details, see Section~10.1.
     \item \emph{Clip predictions to}: set lower and/or upper bounds to constrain predicted values for scoring and exports.
   \end{enumerate}
 
 \subsection{\textbf{Models} tab}
-Displays three synchronized tables for training, internal validation, and external validation. The header controls allow loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), picking the sorting criterion, and filtering models by predictors.
-\begin{itemize}
-  \item \textbf{Top models training}: predictor set, predictor count (N pred), goodness-of-fit (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity (maximum/average VIF).
-  \item \textbf{Top models internal validation (CV)}: LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$).
-  \item \textbf{Top models external validation}: external prediction metrics Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
-\end{itemize}
-All three tables update automatically and stay synchronized with the Validation, Diagnostics, Visualization, and Summary tabs once a model set exists (after a run or when loading saved results).
+Displays three synchronized tables corresponding to training, internal validation, and external validation results. The header controls allow loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), picking the sorting criterion, and filtering models by predictors.
+  \begin{itemize}
+    \item \textbf{Top models training}: predictor set, predictor count (N pred), goodness-of-fit (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity (maximum/average VIF).
+    \item \textbf{Top models internal validation (CV)}: Leave One Out (LOO) and k-fold metrics (Q$^2$, RMSE, MAE, $s$).
+    \item \textbf{Top models external validation}: external prediction metrics Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
+  \end{itemize}
+  
+\noindent Metric definitions are provided in Section~10.2.
+All three tables update automatically and remain synchronized with the Validation, Diagnostics, Visualization, and Summary tabs once a model set is available, either after a run or when loading saved results.
 
 \subsection{\textbf{Validation} tab}
-Configures cross-validation and external validation for the chosen models.
+Configures internal and external validation procedures for the chosen models.
+
 \begin{itemize}
-  \item Model selection: \emph{Top}, \emph{Multiple} (range like \texttt{1-5,7,9}), or \emph{All}.
-  \item LOO and k-fold: internal validation with \emph{Leave One Out (LOO)} and/or \emph{Folds} plus \emph{Repeats}.
-  \item External validation: choose file and delimiter; requires the same target column as the training set.
+  \item \textbf{Model selection}: choose \emph{Top}, \emph{Multiple} (a user-defined range such as \texttt{1-5,7,9}), or \emph{All} models.
+  \item \textbf{Internal validation}: perform Leave-One-Out (LOO) and/or k-fold cross-validation by specifying the number of \emph{Folds} and \emph{Repeats}.
+  \item \textbf{External validation}: select the external dataset file and delimiter; the target column must match that of the training set.
 \end{itemize}
-Validation outputs append automatically to the Models tab when finished.
+
+\noindent Validation results are appended automatically to the Models tab upon completion.
 
 \subsection{\textbf{Diagnostics} tab}
 Provides per-observation diagnostics and the correlation matrix for the active model.
 \begin{itemize}
   \item Model selector with status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); holdout status propagates automatically.
-  \item Observation diagnostics table with \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual by LOO}.
-  \item \emph{Export CSV} saves the currently visible diagnostics using the active dataset filter.
+  \item Observation diagnostics table with \emph{Observation}, \emph{Set}, \emph{Actual}, \emph{Predicted}, \emph{Predicted (LOO)}, \emph{Residual}, \emph{Residual (LOO)}, \emph{Z value}, \emph{Leverage}, \emph{Std. residual}, and \emph{Std. residual (LOO)}.
   \item Variable correlation matrix (lower triangle) with a toggle to include the dependent variable when available, plus CSV export.
 \end{itemize}
 
 \subsection{\textbf{Visualization} tab}
 \begin{itemize}
-  \item Model selector with availability status and dataset filter (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}); Y-randomization runs per model and can insert charts into the plot list when complete.
-  \item Chart list: correlation heatmaps (with or without the dependent variable), Predicted vs Actual (standard and by LOO), residuals vs actual/predictions (standard and by LOO), Scale--Location (standard and by LOO), QQ residuals (standard and by LOO; theoretical quantiles use Acklam's inverse-normal approximation), residual distribution (standard and by LOO), Williams plot (standard and by LOO), Cook's distance vs leverage (standard and by LOO), leverage plot, and Predicted vs Leverage.
-  \item Styling and overlays: legend toggle with four preset positions, labeling mode (observations or auto-detected extra column), identity line (Predicted vs Actual and QQ residuals), optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, and synchronized axes.
-  \item Marker customization: separate color and marker-style pickers for training and testing points, plus marker size control; heatmaps disable incompatible controls automatically.
-  \item Axes and export: manual X/Y limits, editable axis labels with font size, and high-resolution export of the current plot to PNG, TIFF, PDF, or SVG.
+  \item Model selector: displays model availability and allows filtering by dataset scope (\emph{Training only}, \emph{Training and testing}, or \emph{Testing only}). Supports per-model Y-randomization runs and inserts the resulting charts into the chart list upon completion.
+  \item Chart list: correlation heatmaps (with or without the dependent variable), Predicted vs Actual (standard and by LOO), residuals vs actual/predictions (standard and by LOO), Scale--Location (standard and by LOO), QQ residuals (standard and by LOO; theoretical quantiles use Acklam's inverse-normal approximation), residual distribution (standard and by LOO), Williams plot (standard and by LOO), Cook's distance vs leverage (standard and by LOO), leverage plot, and Predicted vs Leverage. A brief guide to the interpretation of each plot type is provided in Section~10.3.
+  \item Plot controls: legend toggle with four preset positions, labeling modes, interactive labels (left-click to add/drag, right-click to clear), identity line, optional linear fit (Predicted vs Actual), $h^*$ threshold color for influence plots, grid toggle, synchronized axes, manual X/Y limits, and editable axis labels with adjustable font size.
 \end{itemize}
 
 \subsection{\textbf{Summary} tab}
 \begin{itemize}
-  \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator) and \emph{Export Summary...} to save the full text dossier. A scrollable pane renders the current model summary.
+  \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator).
   \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
   \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and notes that triggered the robust choice.
   \item Coefficients and equation: coefficient table with standard errors, $t$, $p$, and confidence intervals; equations rendered with and without errors.
@@ -248,7 +249,7 @@ Provides per-observation diagnostics and the correlation matrix for the active m
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
 \begin{itemize}
   \item Inputs: browse/load the CSV and an optional results file (unlocks model-aware options) with a readiness status line.
-  \item Variable scope and axes: choose \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches to histogram mode with fixed-bin or custom-breakpoint controls.
+  \item Variable scope and axes: choose \emph{All variables} or \emph{Only variables of model} (enter an ID), then select X/Y axes. A \emph{Histogram} toggle switches to histogram mode.
   \item Plot controls: marker size/color/style, legend with selectable positions, gridlines, linear fit with optional R$^2$ display, partial residuals (when a model is active), aspect ratios (1, 4:3, 16:9, 9:16), manual axis limits and tick steps, and a dialog for axis labels and font size. Interactive labels can be added/dragged with left-click and cleared with right-click.
   \item Exports and filtered datasets: \emph{Save current plot} to PNG, TIFF, PDF, or SVG (high resolution). \emph{Create filtered dataset} creates a CSV containing observation/ID/non-variable columns plus predictors from the current model or a specified model range; the app warns about missing models in the requested range.
 \end{itemize}
@@ -267,21 +268,20 @@ Summarizes product information and support links. The About panel shows the MLR-
 \subsection{Starting a run}
 \begin{enumerate}
   \item Click Run analysis. The app validates the configuration, reloads the dataset (including the split) and prepares the selected output file.
-  \item The status switches to Running, and previous results, caches, and downstream tabs (Validation, Summary, Diagnostics, Visualization, Desktop) are reset.
+  \item The status switches to Running, and previous results, caches, and downstream tabs (\emph{Validation}, \emph{Summary}, \emph{Diagnostics}, \emph{Visualization}, \emph{Desktop}) are reset.
   \item The progress bar and step counter are reset for the search and post-processing stages.
 \end{enumerate}
 
 \subsection{Progress and cancellation}
-\begin{itemize}
-  \item The progress bar summarizes each stage, and the \emph{Log} lists model counts and timing as they occur.
-  \item \emph{Cancel} stops workers, marks the status as \emph{Cancelling...}, and notes the request in the log. Errors set status to \emph{Error} and leave the run controls ready for another try.
-\end{itemize}
+\begin{enumerate}
+  \item Progress updates show search and post-processing status with running counts.
+  \item \emph{Cancel} stops all workers, performs cleanup, and leaves controls ready for another attempt.
+\end{enumerate}
 
 \subsection{Completion and outputs}
 \begin{enumerate}
-  \item When finished, the status becomes \emph{Completed}; \emph{Run analysis} re-enables and \emph{Cancel} disables. Validation, Diagnostics, Visualization, and Summary tabs are unlocked with the new results, and any external holdout is refreshed if available.
-  \item Results load automatically into the tables, summary pane, and downstream tabs, and the CSV is written to the confirmed path (\texttt{models.csv} by default). The header line embeds run metadata as JSON between \verb|#EPRS-S ... ;#|, and the most recent export path is remembered for the next session.
-  \item If no models meet the reporting threshold, the app clears tables, keeps analysis tabs disabled, and shows an information dialog.
+  \item Upon completion, the process status is set to \emph{Finished}, and the results are automatically written to the specified output path (\texttt{models.csv} by default). The \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs are then enabled and populated with the new results.
+  \item If no models satisfy the reporting threshold, the analysis tabs remain disabled and an informational dialog is displayed to notify the user.
 \end{enumerate}
 
 % =========================================================
@@ -295,84 +295,17 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item \textbf{Reduce}: prune one predictor at a time when the metric stays the same or improves.
   \item If two active predictors exceed the correlation threshold, drop the one with weaker contribution (or lower target correlation when needed) and refresh the remaining set.
   \item \textbf{Swap recovery}: revisit previously dropped variables when swap logs suggest a possible gain.
-  \item Stop when no further gains appear after repeated passes or when the iteration budget per seed is reached. Quality filters (VIF and target metric cutoff, i.e., minimum report R$^2$) keep only unique, eligible models sorted by the target metric.
+  \item Stop when no further gains are observed after repeated passes or when the iteration budget per seed is reached. Quality filters such as significance level and multicollinearity are applied, retaining only unique, eligible models sorted by $R^2$.
 \end{enumerate}
 \medskip
-Runs are deterministic: identical datasets, configuration options, and seed lists produce the same model paths and exported results.
-\medskip
-EPR-S is an original method in this software (doi.org/xxxxx).
+EPR-S runs are fully deterministic: for a fixed dataset, configuration options, and seed list, the algorithm follows identical search paths and produces the same set of exported models. This property ensures full reproducibility of results and facilitates direct comparison across runs. EPR-S is an original search strategy developed for this software package (doi.org/xxxxx).
 
 \subsection{All subsets (exhaustive)}
 Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small (practical below roughly 25 variables) because the number of combinations grows quickly.
 
 % =========================================================
-\section{Result format and exports}
-\subsection{Model CSV}
-\begin{itemize}
-  \item Semicolon-separated file with columns for model ID, predictors, predictor count, training metrics (R$^2$, adjusted R$^2$, RMSE, MAE, $s$), and multicollinearity indicators (maximum and average VIF).
-  \item Internal validation columns append LOO and k-fold metrics (Q$^2$, RMSE, MAE, $s$); external validation columns append Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, $s$, and MAE.
-  \item Serialized metadata (dataset path, delimiter, dependent/ignored columns, constant-filter threshold, exclusions, target metric, search method, covariance type, iteration mode, split configuration, clipping limits, k-fold settings, validation file/delimiter, export limit, models found/explored/reported, and CPU times) lets the UI reload the configuration accurately.
-  \item \emph{Export limit} caps the number of rows written; the exported table follows the training-order sort and mirrors the Models tab, including validation tables when available.
-\end{itemize}
 
-\subsubsection{External validation metrics (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$)}
-
-External validation metrics are computed on the external (test) set using the sum of squared prediction errors (SSE) and follow established QSAR conventions, differing in the choice of reference variance used for normalization.
-
-\begin{itemize}
-
-  \item \textbf{Q$^2_{\mathrm{F1}}$}: computed as
-  \[
-  Q^2_{\mathrm{F1}}
-  =
-  1 -
-  \frac{
-  \sum_{i=1}^{n_{\mathrm{test}}}
-  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
-  }{
-  \sum_{i=1}^{n_{\mathrm{test}}}
-  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{train}}\right)^2
-  }
-  \]
-  where the denominator represents the variance of the external responses measured relative to the \emph{training-set mean}. This formulation evaluates external predictivity using the training calibration reference and penalizes deviations from the mean value learned during model fitting, consistent with the external validation approach introduced by L.~M.~Shi, H.~Fang, W.~Tong, J.~Wu, R.~Perkins, R.~M.~Blair, W.~S.~Branham, S.~L.~Dial, C.~L.~Moland, and D.~M.~Sheehan, \emph{J. Chem. Inf. Comput. Sci.} 2001, 41, 186--195.
-
-  \item \textbf{Q$^2_{\mathrm{F2}}$}: equivalent to the classical external coefficient of determination ($R^2_{\mathrm{ext}}$),
-  \[
-  Q^2_{\mathrm{F2}}
-  =
-  1 -
-  \frac{
-  \sum_{i=1}^{n_{\mathrm{test}}}
-  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
-  }{
-  \sum_{i=1}^{n_{\mathrm{test}}}
-  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{test}}\right)^2
-  }
-  \]
-  where the denominator corresponds to the variance of the external set with respect to its own mean. This definition matches the external validation coefficient formalized and analyzed by G.~Sch\"{u}rmann, R.~Ebert, J.~Chen, B.~Wang, and R.~K\"{u}hne, \emph{J. Chem. Inf. Model.} 2008, 48, 2140--2145.
-
-  \item \textbf{Q$^2_{\mathrm{F3}}$}: compares the external mean squared error (MSE) against the \emph{normalized variance of the training set},
-  \[
-  Q^2_{\mathrm{F3}}
-  =
-  1 -
-  \frac{
-  \displaystyle \frac{1}{n_{\mathrm{test}}}
-  \sum_{i=1}^{n_{\mathrm{test}}}
-  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
-  }{
-  \displaystyle \frac{1}{n_{\mathrm{train}}}
-  \sum_{j=1}^{n_{\mathrm{train}}}
-  \left(y_j^{\mathrm{train}} - \bar{y}^{\mathrm{train}}\right)^2
-  }
-  \]
-  where the numerator is the external MSE and the denominator is the variance of the training responses normalized by the number of training observations. This formulation corresponds to the PRESS- and TSS-normalized external validation metric reported by V.~Consonni, D.~Ballabio, and R.~Todeschini, \emph{J. Chem. Inf. Model.} 2009, 49, 1669--1678.
-
-\end{itemize}
-
-Overall, Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ are implemented in MLR-X following these established external validation frameworks, with Q$^2_{\mathrm{F3}}$ explicitly using a training-variance--normalized form to improve numerical stability on small or low-variance external sets.
-
-\subsection{Summary and reports}
+\section{Summary and reports}
 \begin{itemize}
   \item Summary tab: \emph{Export Summary...} writes the currently selected model dossier (including the chosen covariance setting) to a text file.
   \item Diagnostics tab: \emph{Export CSV} saves the filtered observation diagnostics and the active correlation matrix (with or without the target) using semicolon-separated CSV.
@@ -396,61 +329,176 @@ If additional arguments are supplied, the program shows the expected syntax and 
 Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"}).
 
 \subsection{Configuration file structure}
-Plain-text file with headed blocks (\# Dataset, \# Method, \# Validation, \# Output, etc.) and key--value pairs. List-type options can be selected by index using \texttt{selected option} inside the block. Section 13 includes a complete example configuration file.
+A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. Section~13 provides a complete, annotated example of a configuration file
 \subsection{Execution and progress}
-The CLI loads the configuration, prints the dataset name, available predictors, search method, and (for EPR-S) the seed and iteration settings. It validates ranges (including manual iteration counts and split IDs) and streams progress updates for model searching and VIF calculations. Upon completion it reports models explored, models meeting the Target metric cutoff, filtered models kept after export limits, and CPU times.
+The CLI loads the configuration and reports the dataset name, available predictors, selected search method, and—when using EPR-S—the active seed list and iteration budget. It validates all parameter ranges, including manual iteration counts and split identifiers, and streams live progress updates during model search or evaluation, as well as during VIF computations. Upon completion, the CLI summarizes the total models explored, those meeting the target-metric threshold, the filtered set retained after export limits, and the corresponding CPU times.
 
 \subsection{Output}
-Results are exported to the specified CSV with semicolon separation, normalized variable names, training/internal/external metrics, and a metadata header so the GUI can reload the run. If no model satisfies the Target metric cutoff, no CSV is written. Any parsing or runtime error is printed to stderr and exits with code 1.
-The output path can be changed in the configuration file; by default the CLI writes \texttt{models.csv} to the current working directory.
+Results are exported to the specified CSV file using semicolon separation, with normalized variable names and training, internal, and external metrics. If no model satisfies the target metric cutoff, an empty CSV file is written. Any parsing or runtime errors are printed. The output path can be changed in the configuration file; by default, the CLI writes \texttt{models.csv} to the current working directory.
 
 % =========================================================
 \section{Operational good practices}
 \begin{itemize}
   \item Validate inputs before running: preview the CSV to confirm the delimiter, target column, non-variable columns, and exclusions. Apply the constant filter when near-constant predictors should be removed. If planning an external holdout, ensure identical headers, column order, and target definition across all files.
-  \item Choose the search strategy deliberately: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. Prefer EPR-S for large or high-dimensional designs; reserve All Subsets for small datasets or confirmatory analyses.
+  \item Choose the search strategy by scope: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. In practice, EPR-S is preferred for large or high-dimensional designs, while All Subsets should be reserved for small datasets or confirmatory analyses.
   \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors; use the \emph{Recommended} button for automatic calculation. Increase this value if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility.
   \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust the \emph{Target metric cutoff} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
-  \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0--1) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
-  \item Align parallelization with available hardware: set \emph{Parallel jobs} according to available CPU capacity. Although the app normalizes this value, requesting fewer jobs can reduce contention on shared or heavily loaded machines.
+  \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0.9 by default) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
+  \item Align parallelization with available hardware: set \emph{CPU cores to use} according to available CPU capacity.
   \item Validate comprehensively and interpret jointly: always run internal validation (LOO or k-fold) and, when available, external validation. Review the \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to assess model stability and reliability. Enable the recommended covariance option in the Summary tab when statistical inference is required.
   \item Apply prediction clipping cautiously: use \emph{Clip predictions} only when the response variable has known physical or theoretical bounds, and ensure limits are consistent with the units and range of the training data.
   \item Preserve reproducibility: save all generated model CSVs and configuration files. These contain embedded metadata that allow future GUI or CLI sessions to reload and reproduce the exact run context.
 \end{itemize}
 
 % =========================================================
-\section{Parameter and chart reference}
+\section{Configuration Parameters, Metrics, and Diagnostic Charts}
 
 \subsection{Key configuration parameters}
 \begin{itemize}
   \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models.
   \item \textbf{Seed size}: sets the initial predictor count per seed; values near half the predictor limit balance exploration and computation.
-  \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, manual, or convergence modes.
-  \item \textbf{Max predictors per model}: upper bound on predictors allowed in any candidate model.
-  \item \textbf{Significance level}: threshold for coefficient inclusion during model refinement.
-  \item \textbf{Correlation threshold}: maximum tolerated pairwise correlation before pruning to control redundancy.
-  \item \textbf{VIF threshold}: veto for models with multicollinearity above the specified variance inflation factor.
-  \item \textbf{Target metric cutoff}: training-set threshold applied before metrics are compared with the optimization target.
-  \item \textbf{Top models to report}: limit on retained models; aligned with the CSV export limit.
-  \item \textbf{Target metric}: optimization objective (R$^2$, adjusted R$^2$, Q$^2$, or RMSE (LOO)).
-  \item \textbf{Covariance estimator}: robust or non-robust variance choice for standard errors and inference.
-  \item \textbf{Clip predictions}: lower/upper bounds used when predictions must respect known limits.
-  \item \textbf{Parallel jobs}: requested worker count for parallel tasks, normalized to available CPU cores.
+  \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, \emph{manual}, or \emph{converge} modes.
+  \item \textbf{Max predictors per model}: maximum number of predictors permitted in any candidate model.
+  \item \textbf{Significance level}: p-value threshold used for retaining regression coefficients during the model-refinement step.
+  \item \textbf{Correlation threshold}: maximum allowed absolute pairwise correlation between predictors; variables exceeding this limit are pruned to reduce redundancy.
+  \item \textbf{VIF threshold}: exclusion criterion for candidate models exhibiting multicollinearity above the specified variance inflation factor, where high VIF values reflect an inflation of the estimated regression coefficients’ variances due to linear dependence among predictors. In particular, VIF values in the range of 5–10 are commonly interpreted as indicative of problematic multicollinearity, while values exceeding 10 are associated with severely unstable and unreliable parameter estimates, as discussed and formalized by J.~H.~Kim, \emph{Korean J. Anesthesiol.} 2019, 72, 558--569, and by M.~O.~Akinwande \emph{et~al.}, \emph{Open J. Stat.} 2015, 5, 754--767.
+  \item \textbf{Target metric}: performance measure used as the optimization objective (R$^2$, adjusted R$^2$, Q$^2$ (LOO), or RMSE (LOO)).
+  \item \textbf{Target metric cutoff}: minimum (or maximum, depending on the metric) training-set performance value a model must satisfy before being considered in the optimization stage.
+  \item \textbf{Top models to report}: maximum number of best-performing models retained for final reporting; this value matches the CSV export limit.
+  \item \textbf{Covariance estimator}: method used to estimate coefficient covariance matrices, where the \emph{non-robust} estimator assumes homoskedastic errors under the classical ordinary least squares (OLS) framework. The \emph{HC0} estimator replaces the constant error variance with squared OLS residuals, yielding a heteroskedasticity-consistent covariance matrix as originally proposed by H.~White, \emph{Econometrica} 1980, 48, 817--838. The \emph{HC1} estimator applies a finite-sample degrees-of-freedom correction to HC0, while \emph{HC2} down-weights high-leverage observations using the factor $1/(1-h_i)$, and \emph{HC3} applies the stronger correction $1/(1-h_i)^2$, providing a jackknife-like adjustment and enhanced protection against leverage effects in finite samples, as formalized by J.~G.~MacKinnon \emph{et~al.}, \emph{J. Econometrics} 1985, 29, 305--325. The use of HC3 is often recommended in practical applications due to its superior finite-sample performance and robustness to influential observations, particularly in small to moderate sample sizes, as discussed by J.~S.~Long \emph{et~al.}, \emph{Am. Stat.} 2000, 54, 217--224.
+  \item \textbf{Clip predictions}: lower and upper bounds applied to predicted values when outputs must respect known physical or empirical limits.
+  \item \textbf{CPU cores to use}: number of worker processes requested for parallel execution.
+\end{itemize}
+
+\subsection{Metric definitions}
+
+\paragraph{Training metrics}
+The following statistics are computed on the training set:
+\begin{itemize}
+  \item \textbf{R$^2$}: coefficient of determination, defined as one minus the ratio of the residual sum of squares to the total sum of squares.
+  \item \textbf{Adj--R$^2$}: R$^2$ adjusted for the number of predictors and observations, accounting for model complexity and penalizing overfitting.
+  \item \textbf{RMSE}: root mean squared error of the training residuals.
+  \item \textbf{MAE}: mean absolute error of the training residuals.
+  \item \textbf{$s$}: standard error of the regression, equivalent to the residual standard deviation.
+  \item \textbf{VIF (max/avg)}: maximum and average variance inflation factor values across all predictors, used to assess multicollinearity.
+  \item \textbf{$|r|_{\max}$}: maximum absolute pairwise Pearson correlation coefficient among predictors (when reported).
+\end{itemize}
+
+\paragraph{Internal validation metrics}
+Internal validation is performed using leave-one-out (LOO) and/or $k$-fold cross-validation. The reported metrics mirror those used for the training set and include Q$^2$ (PRESS-based coefficient of determination), RMSE, MAE, and $s$, all computed according to the selected cross-validation scheme.
+
+\paragraph{External validation metrics}
+External validation metrics are computed on the independent test set and include Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, and MAE.
+
+The Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, and Q$^2_{\mathrm{F3}}$ coefficients are based on the sum of squared prediction errors (SSE) and follow established QSAR validation conventions, differing in the choice of the reference variance used for normalization.
+
+\begin{itemize}
+
+  \item \textbf{Q$^2_{\mathrm{F1}}$}: defined as
+  \[
+  Q^2_{\mathrm{F1}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the denominator represents the variance of the external responses relative to the \emph{training-set mean}. This formulation evaluates external predictivity with respect to the calibration reference learned during model fitting and penalizes deviations from the training mean, consistent with the external validation approach proposed by L.~M.~Shi\emph{et~al.}, \emph{J. Chem. Inf. Comput. Sci.} 2001, 41, 186--195.
+
+  \item \textbf{Q$^2_{\mathrm{F2}}$}: equivalent to the classical external coefficient of determination ($R^2_{\mathrm{ext}}$),
+  \[
+  Q^2_{\mathrm{F2}}
+  =
+  1 -
+  \frac{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \bar{y}^{\mathrm{test}}\right)^2
+  }
+  \]
+  where the denominator corresponds to the variance of the external responses with respect to their own mean. This definition matches the external validation coefficient formalized and discussed by G.~Sch\"{u}rmann, \emph{et~al.}, \emph{J. Chem. Inf. Model.} 2008, 48, 2140--2145.
+
+  \item \textbf{Q$^2_{\mathrm{F3}}$}: compares the external mean squared error (MSE) with the normalized variance of the training set,
+  \[
+  Q^2_{\mathrm{F3}}
+  =
+  1 -
+  \frac{
+  \displaystyle \frac{1}{n_{\mathrm{test}}}
+  \sum_{i=1}^{n_{\mathrm{test}}}
+  \left(y_i^{\mathrm{test}} - \hat{y}_i^{\mathrm{test}}\right)^2
+  }{
+  \displaystyle \frac{1}{n_{\mathrm{train}}}
+  \sum_{j=1}^{n_{\mathrm{train}}}
+  \left(y_j^{\mathrm{train}} - \bar{y}^{\mathrm{train}}\right)^2
+  }
+  \]
+  where the numerator is the external MSE and the denominator is the variance of the training responses normalized by the number of training observations. This formulation, introduced by by V.~Consonni, \emph{et~al.}, \emph{J. Chem. Inf. Model.} 2009, 49, 1669--1678, improves numerical stability for small or low-variance external sets.
+
 \end{itemize}
 
 \subsection{Interpreting key charts}
-\begin{itemize}
-  \item \textbf{Correlation heatmaps}: visualize pairwise predictor relationships; dark blocks expose multicollinearity risks.
-  \item \textbf{Predicted vs Actual}: alignment with the identity line indicates accurate calibration; systematic deviations flag bias.
-  \item \textbf{Residuals vs Predicted/Actual}: random scatter suggests homoskedasticity and linearity; structure signals misspecification.
-  \item \textbf{Scale--Location}: spreads residuals against fitted values to reveal variance patterns; flattening curves indicate stable variance.
-  \item \textbf{Residual distribution}: histogram or density of residuals to spot asymmetry, heavy tails, or outliers relative to a centered, bell-shaped pattern.
-  \item \textbf{QQ residuals}: departures from the diagonal highlight non-normal residual distributions.
-  \item \textbf{Leverage plot}: leverage values across observations reveal influential points relative to the threshold.
-  \item \textbf{Cook's distance vs leverage}: high distances at elevated leverage identify observations with strong influence on estimates.
-  \item \textbf{Williams plot}: combines leverage and standardized residuals to spot influential observations beyond leverage and residual cutoffs.
-  \item \textbf{Predicted vs Leverage}: blends fitted values with leverage to isolate influence patterns across the prediction range.
-\end{itemize}
+
+\paragraph{Correlation heatmaps}
+Correlation heatmaps visualize pairwise Pearson correlation coefficients between predictors. High absolute correlation values indicate potential multicollinearity, which is controlled in MLR-X using the user-defined correlation threshold during model search.
+
+\paragraph{Predicted vs.\ actual}
+These plots compare fitted values $\hat{y}_i$ with observed responses $y_i$. Proximity to the identity line indicates good calibration, while systematic deviations suggest bias, underfitting, or overfitting.
+
+\paragraph{Residuals vs.\ predicted / actual}
+Residual plots display $e_i = y_i - \hat{y}_i$ as a function of predicted or observed values. A random scatter around zero supports the assumptions of linearity and homoskedasticity, whereas visible structure or fan-shaped patterns indicate model misspecification or non-constant variance.
+
+\paragraph{Scale--location}
+The scale--location plot shows $\sqrt{|r_i|}$ versus fitted values, where $r_i$ are standardized residuals. A roughly horizontal trend indicates stable variance across the prediction range, while increasing spread suggests heteroskedasticity.
+
+\paragraph{Residual distribution}
+Histograms or density plots of residuals illustrate the overall error distribution. Symmetry around zero and moderate tails are consistent with approximately normal errors, whereas skewness or heavy tails may signal outliers or non-normality.
+
+\paragraph{Q--Q residuals}
+Quantile--quantile plots compare standardized residuals against theoretical normal quantiles. Deviations from the diagonal, particularly in the tails, indicate departures from normality.
+
+\paragraph{Leverage plots}
+Leverage plots display the diagonal elements of the hat matrix,
+\[
+h_i
+=
+\mathbf{x}_i^\top
+(\mathbf{X}^\top \mathbf{X})^{-1}
+\mathbf{x}_i,
+\]
+where $\mathbf{x}_i$ is the predictor vector (including the intercept). Observations with leverage exceeding the threshold
+\[
+h^\ast = \frac{2(p+1)}{n}
+\]
+are considered structurally influential and may disproportionately affect model estimates.
+
+\paragraph{Cook’s distance vs.\ leverage}
+Cook’s distance combines leverage and residual magnitude to assess the global influence of each observation:
+\[
+D_i
+=
+\frac{e_i^2}{(p+1)s^2}
+\frac{h_i}{(1-h_i)^2}.
+\]
+Large values of $D_i$ indicate observations whose removal would substantially alter the fitted regression coefficients.
+
+\paragraph{Williams plot}
+The Williams plot jointly displays standardized residuals
+\[
+r_i
+=
+\frac{e_i}{s\sqrt{1-h_i}}
+\]
+against leverage values $h_i$. Observations exceeding both the standardized residual limits (typically $\pm 3$) and the leverage threshold $h^\ast$ are considered highly influential and should be examined carefully for data quality issues, model misspecification, or domain-specific justification.
+
+\paragraph{Predicted vs.\ leverage}
+This plot relates fitted values $\hat{y}_i$ to leverage $h_i$, facilitating the identification of influential observations across the response range, particularly those combining extreme predictions with high structural influence.
 
 % =========================================================
 \section{Troubleshooting and FAQ}
@@ -460,7 +508,7 @@ The output path can be changed in the configuration file; by default the CLI wri
   \item \textbf{No models exported}: review the \emph{Target metric cutoff} and \emph{VIF threshold}.
   \item \textbf{External validation fails}: the target column must match and the CSV must contain the same predictors.
   \item \textbf{Empty plot or missing labels}: select a valid model/dataset or load a results file.
-  \item \textbf{Unexpected CPU usage}: check \emph{Parallel jobs}; the system normalizes the value to at least 1 and reports adjustments.
+  \item \textbf{Unexpected CPU usage}: check \emph{CPU cores to use}; adjust to match the desired workload.
 \end{itemize}
 Report any persisting issues or bugs at \url{https://github.com/Jacksonalcazar/MLR-X/issues} so they can be addressed promptly.
 
@@ -558,14 +606,16 @@ Correlation threshold = 0.9
 VIF threshold = 4.0
 Target metric cutoff = 0.8
 Top models to export = 5000
-Parallel jobs = 4
+CPU cores to use = 4
 
 # Prediction clipping
 Clip predictions = false
 Clip lower bound = none
 Clip upper bound = none
 
-# Output
+-------
+Output
+-------
 Output path = models.csv
 \end{lstlisting}
 
