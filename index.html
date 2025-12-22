@@ -169,11 +169,11 @@
   <header>
     <div>
       <span class="tag">Open Source</span>
-      <h1>MLR-X 1.0 — Multiple Linear Regression without limits</h1>
+      <h1>MLR-X 1.0.0 — Scalable multiple linear regression</h1>
       <p class="lead">
-        Desktop tool to fit and diagnose multiple linear regression models on
-        small or large datasets, with optimized routines and interactive
-        visualization support.
+        Cross-platform desktop and CLI tool to fit and diagnose multiple linear
+        regression models on small or large datasets with deterministic search,
+        integrated validation, and export-ready reports.
       </p>
       <div class="cta-group">
         <a class="btn" href="https://github.com/Jacksonalcazar/MLR-X" target="_blank" rel="noreferrer">GitHub repository</a>
@@ -181,12 +181,13 @@
       </div>
     </div>
     <div class="mockup" aria-label="Interface preview">
-      <div class="badge">Production-ready GUI + CLI</div>
+      <div class="badge">Deterministic EPR-S + All subsets</div>
       <code>
-$ mlrx run --dataset data.csv --target Sales
-Training... ✔️  Best predictors: 14
-Metrics: R² = 0.92, RMSE = 0.37
-Exported to: results/report.html
+$ ./MLRX config.conf
+Loading dataset: data.csv
+Search: EPR-S (1000 seeds, max 6 predictors)
+Status: Finished ✔️  Exported 5000 models → models.csv
+Validation: LOO + k-fold ready; CLI available on GUI+CLI builds
       </code>
     </div>
   </header>
@@ -195,20 +196,24 @@ Exported to: results/report.html
     <h2 class="section-title">Why choose MLR-X?</h2>
     <div class="grid features">
       <div class="card">
-        <h3>Scalable and efficient</h3>
-        <p>Process small or large datasets with parallel execution and lazy loading of heavy libraries.</p>
+        <h3>Portable and cross-platform</h3>
+        <p>Self-contained binaries for Linux, macOS (Arm64), and Windows 10/11; no external Python or scientific stacks required.</p>
       </div>
       <div class="card">
         <h3>GUI and CLI modes</h3>
-        <p>Intuitive graphical interface for fast exploration or a command line for reproducible pipelines.</p>
+        <p>GUI-only builds for quick exploration and GUI+CLI variants that keep the console open to run the full pipeline via <code>config.conf</code>.</p>
       </div>
       <div class="card">
-        <h3>Reports and diagnostics</h3>
-        <p>Includes validations, standard metrics (MAE, MSE, R²), and outputs ready for export.</p>
+        <h3>Deterministic search engines</h3>
+        <p>Original EPR-S heuristic and exhaustive all-subsets search with multicollinearity gates, reproducible runs, and configurable seeds.</p>
+      </div>
+      <div class="card">
+        <h3>Validation and diagnostics</h3>
+        <p>Built-in LOO and k-fold validation, external validation, diagnostics, visualization, and summary exports synchronized across tabs.</p>
       </div>
       <div class="card">
         <h3>Open source</h3>
-        <p>Distributed under AGPL-3.0; contribute, review the code, and build extensions on an open base.</p>
+        <p>Distributed under AGPL-3.0; contribute, review the code, and build extensions on an open base with citation guidance.</p>
       </div>
     </div>
   </section>
@@ -216,27 +221,32 @@ Exported to: results/report.html
   <section>
     <h2 class="section-title">Official downloads</h2>
     <p style="color: var(--muted); margin-bottom: 18px;">
-      Choose the packaged build for your system. Each download ships with ready-to-use executables.
+      Portable packages with ready-to-use executables; add them to your PATH if you want CLI access.
     </p>
     <div class="grid downloads">
       <div class="card">
-        <h3>MLR-X for Linux</h3>
-        <p>Packaged binary for modern Linux distributions.</p>
+        <h3>MLR-X for Linux (GUI + CLI)</h3>
+        <p>Single binary for Ubuntu 20.04+ that defaults to the GUI and enables CLI runs via configuration files.</p>
         <a class="btn" href="https://mega.nz/file/TctQQK5Z#fBb6ycWS131tES6uGPAT0fBVN9wMLs7tC7eLtUcKOuI" target="_blank" rel="noreferrer">Download</a>
       </div>
       <div class="card">
-        <h3>MLR-X for macOS</h3>
-        <p>Universal build for Apple Silicon and Intel (coming soon).</p>
-        <button class="btn secondary" type="button" aria-label="macOS build coming soon" disabled>Download coming soon</button>
+        <h3>MLR-X for macOS (GUI)</h3>
+        <p>Arm64 app bundle that launches only the graphical interface.</p>
+        <a class="btn secondary" href="https://github.com/Jacksonalcazar/MLR-X/releases" target="_blank" rel="noreferrer">Get from releases</a>
+      </div>
+      <div class="card">
+        <h3>MLR-X for macOS (GUI + CLI)</h3>
+        <p>App bundle that opens both the GUI and a terminal to run CLI tasks alongside the interface.</p>
+        <a class="btn secondary" href="https://github.com/Jacksonalcazar/MLR-X/releases" target="_blank" rel="noreferrer">Get from releases</a>
       </div>
       <div class="card">
         <h3>MLR-X Windows (GUI)</h3>
-        <p>Desktop app with the full graphical interface.</p>
+        <p>Portable executable that launches only the GUI without a console window.</p>
         <a class="btn" href="https://mega.nz/file/3VNGQZRB#Kw675BSnGPrD5n0XijCTr7tGINYj5R0001UsXGdi_Mw" target="_blank" rel="noreferrer">Download</a>
       </div>
       <div class="card">
         <h3>MLR-X Windows (GUI + CLI)</h3>
-        <p>Includes the graphical app and the command-line utility in one package.</p>
+        <p>Includes the GUI and a terminal window for running CLI workflows with the same executable.</p>
         <a class="btn" href="https://mega.nz/file/CZVzBBpJ#BRKhlurKfEEDcDVXl97B0mBg314LTYOQ_MMXw9rTjLE" target="_blank" rel="noreferrer">Download</a>
       </div>
     </div>
@@ -247,8 +257,8 @@ Exported to: results/report.html
     <div class="grid features">
       <div class="card">
         <h3>Documentation</h3>
-        <p>Read the user guide and examples directly in the repository.</p>
-        <a href="https://github.com/Jacksonalcazar/MLR-X/manual/MLR-X_manual_1.0.pdf" target="_blank" rel="noreferrer">Open manual</a>
+        <p>Read the MLR-X 1.0.0 user guide and configuration examples.</p>
+        <a href="https://github.com/Jacksonalcazar/MLR-X/blob/main/MLRX_manual.tex" target="_blank" rel="noreferrer">Open manual</a>
       </div>
       <div class="card">
         <h3>Report issues</h3>
@@ -257,8 +267,8 @@ Exported to: results/report.html
       </div>
       <div class="card">
         <h3>Academic citation</h3>
-        <p>Cite MLR-X 1.0 in your publications using the recommended format.</p>
-        <code style="display:block; background:#0b132b; color:var(--accent); padding:10px; border-radius:8px;">Alcázar, Jackson J. "MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets".</code>
+        <p>Cite MLR-X 1.0.0 in your publications using the recommended format.</p>
+        <code style="display:block; background:#0b132b; color:var(--accent); padding:10px; border-radius:8px;">Alcázar, Jackson J. "MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets."</code>
       </div>
     </div>
   </section>
@@ -266,7 +276,7 @@ Exported to: results/report.html
   <div class="footer">
     <span>© 2025 MLR-X — Distributed under AGPL-3.0.</span>
     <a href="https://github.com/Jacksonalcazar/MLR-X" target="_blank" rel="noreferrer">Source code</a>
-    <a href="mailto:jacksonalcazar@gmail.com">Contact</a>
+    <a href="mailto:jjalcazar.dev@gmail.com">Contact</a>
   </div>
 </body>
 </html>
