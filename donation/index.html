@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLR-X Donation</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      min-height: 100vh;
+      background: radial-gradient(circle at 10% 20%, rgba(0, 132, 255, 0.08), transparent 35%),
+                  radial-gradient(circle at 90% 10%, rgba(122, 89, 255, 0.12), transparent 40%),
+                  radial-gradient(circle at 50% 80%, rgba(0, 200, 150, 0.1), transparent 45%),
+                  var(--bg, #0b1524);
+      color: #f4f7fb;
+    }
+    .card {
+      max-width: 720px;
+      margin: auto;
+      padding: 2.5rem;
+      background: rgba(10, 17, 28, 0.72);
+      border-radius: 18px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    h1 {
+      margin-top: 0;
+      letter-spacing: -0.02em;
+    }
+    p {
+      line-height: 1.6;
+      color: #dce6f6;
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.95rem 1.4rem;
+      margin-top: 1rem;
+      background: linear-gradient(135deg, #00c896, #4dd0ff);
+      color: #0b1524;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 700;
+      box-shadow: 0 10px 30px rgba(0, 200, 150, 0.35);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 36px rgba(0, 200, 150, 0.45);
+    }
+    ul {
+      padding-left: 1.1rem;
+    }
+    .pill {
+      display: inline-block;
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      background: rgba(77, 208, 255, 0.16);
+      color: #b7e7ff;
+      font-size: 0.9rem;
+      margin-right: 0.35rem;
+    }
+    .footer {
+      margin-top: 2rem;
+      font-size: 0.9rem;
+      color: #9fb2cc;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="pill">Support MLR-X</div>
+    <h1>Thank you for considering a donation</h1>
+    <p>Your contribution keeps MLR-X free, robust, and ready for the next set of models. Donations help cover maintenance, documentation, and new features the community has asked for.</p>
+    <ul>
+      <li>Fuel ongoing regression research and feature development.</li>
+      <li>Improve documentation, examples, and teaching resources.</li>
+      <li>Keep binaries and the manual freely available for all users.</li>
+    </ul>
+    <a class="cta" href="https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG">Proceed to donation</a>
+    <div class="footer">You can cancel or return to this page at any time. No payment is processed until you confirm on PayPal.</div>
+  </main>
+</body>
+</html>
