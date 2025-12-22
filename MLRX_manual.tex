@@ -242,8 +242,8 @@ Provides per-observation diagnostics and the correlation matrix for the active m
   \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator).
   \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
   \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and notes that triggered the robust choice.
-  \item Coefficients and equation: coefficient table with standard errors, $t$, $p$, and confidence intervals; equations rendered with and without errors.
-  \item Metrics: training block (R$^2$, adj-R$^2$, RMSE, MAE, $s$, VIF (max/avg), $|r|_{\max}$), internal validation (LOO and $k$-fold, with repeats when enabled), and external validation (Q$^2_{\mathrm{F1}}$, Q$^2_{\mathrm{F2}}$, Q$^2_{\mathrm{F3}}$, RMSE, MAE).
+  \item Coefficients and equation: coefficient table with standard errors, $t$, $p$ ($p$-values), and confidence intervals; equations rendered with and without errors.
+  \item Metrics including training performance, internal validation based on leave-one-out and repeated $k$-fold cross-validation, and external validation.
 \end{itemize}
 
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
@@ -412,11 +412,9 @@ The following statistics are computed on the training set:
 Internal validation is performed using leave-one-out (LOO) and/or $k$-fold cross-validation. For LOO, the prediction for observation $i$ is computed as $\hat{y}_i^{(-i)} = y_i - e_i/(1 - h_i)$, where $h_i$ is the leverage, leading to LOO residuals $e_i^{\mathrm{LOO}} = y_i - \hat{y}_i^{(-i)}$. The reported metrics are
 \[
 Q^2_{\mathrm{LOO}} = 1 - \frac{\sum_i (e_i^{\mathrm{LOO}})^2}{\sum_i (y_i - \bar{y}^{\mathrm{train}})^2},\quad
-\mathrm{RMSE}_{\mathrm{LOO}} = \sqrt{\frac{1}{n_{\mathrm{train}}}\sum_i (e_i^{\mathrm{LOO}})^2},\quad
-\mathrm{MAE}_{\mathrm{LOO}} = \frac{1}{n_{\mathrm{train}}}\sum_i |e_i^{\mathrm{LOO}}|,
-\]
-with
-\[
+\mathrm{RMSE}_{\mathrm{LOO}} = \sqrt{\frac{1}{n_{\mathrm{train}}}\sum_i (e_i^{\mathrm{LOO}})^2},\] 
+\[\quad
+\mathrm{MAE}_{\mathrm{LOO}} = \frac{1}{n_{\mathrm{train}}}\sum_i |e_i^{\mathrm{LOO}}|,\quad and \quad
  s_{\mathrm{LOO}} = \sqrt{\frac{\sum_i (e_i^{\mathrm{LOO}})^2}{n_{\mathrm{train}} - p - 1}}
 \]
 following the same degrees-of-freedom rule as $s$ above. The $k$-fold versions use the corresponding fold residuals in place of $e_i^{\mathrm{LOO}}$.
@@ -487,22 +485,28 @@ with the same safe degrees-of-freedom fallback used in the code. The Q$^2_{\math
 \subsection{Interpreting key charts}
 
 \paragraph{Correlation heatmaps}
-Correlation heatmaps visualize pairwise Pearson correlation coefficients between predictors. High absolute correlation values indicate potential multicollinearity, which is controlled in MLR-X using the user-defined correlation threshold during model search.
+Correlation heatmaps visualize pairwise Pearson correlation coefficients between predictors. High absolute correlation values indicate potential multicollinearity, which is controlled using the user-defined correlation threshold during model search.
+See Belsley \emph{et~al.}, \emph{Regression Diagnostics: Identifying Influential Data and Sources of Collinearity}, Wiley, 1980; and Dormann \emph{et~al.}, \emph{Collinearity: a review of methods to deal with it and a simulation study evaluating their performance}, \emph{Ecography}, 2013, 36, 27--46.
 
 \paragraph{Predicted vs.\ actual}
 These plots compare fitted values $\hat{y}_i$ with observed responses $y_i$. Proximity to the identity line indicates good calibration, while systematic deviations suggest bias, underfitting, or overfitting.
+See Tropsha \emph{et~al.}, \emph{Best practices for QSAR model development, validation, and exploitation}, \emph{J. Comput. Aided Mol. Des.}, 2003, 17, 83--97.
 
 \paragraph{Residuals vs.\ predicted / actual}
 Residual plots display $e_i = y_i - \hat{y}_i$ as a function of predicted or observed values. A random scatter around zero supports the assumptions of linearity and homoskedasticity, whereas visible structure or fan-shaped patterns indicate model misspecification or non-constant variance.
+See Montgomery \emph{et~al.}, \emph{Introduction to Linear Regression Analysis}, 5th ed., Wiley, 2012.
 
 \paragraph{Scale--location}
 The scale--location plot shows $\sqrt{|r_i|}$ versus fitted values, where $r_i$ are standardized residuals. A roughly horizontal trend indicates stable variance across the prediction range, while increasing spread suggests heteroskedasticity.
+See Fox and Weisberg, \emph{An R Companion to Applied Regression}, 3rd ed., Sage, 2019.
 
 \paragraph{Residual distribution}
 Histograms or density plots of residuals illustrate the overall error distribution. Symmetry around zero and moderate tails are consistent with approximately normal errors, whereas skewness or heavy tails may signal outliers or non-normality.
+See Kutner \emph{et~al.}, \emph{Applied Linear Statistical Models}, 5th ed., McGraw--Hill, 2005.
 
 \paragraph{Q--Q residuals}
 Quantile--quantile plots compare standardized residuals against theoretical normal quantiles. Deviations from the diagonal, particularly in the tails, indicate departures from normality.
+See Montgomery \emph{et~al.}, \emph{Introduction to Linear Regression Analysis}, 5th ed., Wiley, 2012.
 
 \paragraph{Leverage plots}
 Leverage plots display the diagonal elements of the hat matrix,
@@ -515,9 +519,10 @@ h_i
 \]
 where $\mathbf{x}_i$ is the predictor vector (including the intercept). Observations with leverage exceeding the threshold
 \[
-h^\ast = \frac{2(p+1)}{n}
+h^\ast = \frac{3(p+1)}{n}
 \]
 are considered structurally influential and may disproportionately affect model estimates.
+See Cook, \emph{Detection of influential observation in linear regression}, \emph{Technometrics}, 1977, 19, 15--18; and Kutner \emph{et~al.}, \emph{Applied Linear Statistical Models}, 5th ed., McGraw--Hill, 2005.
 
 \paragraph{Cook’s distance vs.\ leverage}
 Cook’s distance combines leverage and residual magnitude to assess the global influence of each observation:
@@ -528,6 +533,7 @@ D_i
 \frac{h_i}{(1-h_i)^2}.
 \]
 Large values of $D_i$ indicate observations whose removal would substantially alter the fitted regression coefficients.
+See Cook and Weisberg, \emph{Residuals and Influence in Regression}, Chapman \& Hall, 1982.
 
 \paragraph{Williams plot}
 The Williams plot jointly displays standardized residuals
@@ -537,9 +543,12 @@ r_i
 \frac{e_i}{s\sqrt{1-h_i}}
 \]
 against leverage values $h_i$. Observations exceeding both the standardized residual limits (typically $\pm 3$) and the leverage threshold $h^\ast$ are considered highly influential and should be examined carefully for data quality issues, model misspecification, or domain-specific justification.
+See Sch\"{u}rmann \emph{et~al.}, \emph{J. Chem. Inf. Model.}, 2008, 48, 2140--2145; and Gramatica, \emph{Principles of QSAR model validation}, \emph{QSAR \& Combinatorial Science}, 2007, 26, 694--701.
 
 \paragraph{Predicted vs.\ leverage}
 This plot relates fitted values $\hat{y}_i$ to leverage $h_i$, facilitating the identification of influential observations across the response range, particularly those combining extreme predictions with high structural influence.
+See Cook, \emph{Detection of influential observation in linear regression}, \emph{Technometrics}, 1977, 19, 15--18; and Fox and Weisberg, \emph{An R Companion to Applied Regression}, 3rd ed., Sage, 2019.
+
 
 % =========================================================
 \section{Troubleshooting and FAQ}
@@ -565,6 +574,7 @@ Report any persisting issues or bugs at \url{https://github.com/Jacksonalcazar/M
 \end{itemize}
 
 % =========================================================
+\newpage
 \section{Configuration file example}
 \begin{lstlisting}[style=mlrx]
 # MLR-X configuration file
