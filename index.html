@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MLR-X | Multiple Linear Regression at Scale</title>
+  <style>
+    :root {
+      --bg: #0b132b;
+      --panel: #1c2541;
+      --accent: #5bc0be;
+      --text: #f4f5f7;
+      --muted: #c5cbe3;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(160deg, #0b132b 0%, #1c2541 60%, #0b132b 100%);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header {
+      padding: 64px 10vw 40px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    header .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(91, 192, 190, 0.15);
+      color: var(--accent);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      font-size: 12px;
+    }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      margin: 12px 0 16px;
+      line-height: 1.15;
+    }
+
+    p.lead {
+      font-size: 18px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    .cta-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+      box-shadow: var(--shadow);
+      background: var(--accent);
+      color: #0b132b;
+    }
+
+    .btn.secondary {
+      background: transparent;
+      border-color: rgba(255, 255, 255, 0.25);
+      color: var(--text);
+    }
+
+    .btn:hover { transform: translateY(-2px); }
+
+    .mockup {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .mockup code {
+      display: block;
+      background: #0b132b;
+      padding: 14px;
+      border-radius: 10px;
+      color: var(--accent);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    section {
+      padding: 32px 10vw 8px;
+    }
+
+    .section-title {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .features { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .downloads { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h3 { margin-top: 0; margin-bottom: 10px; }
+    .card p { margin: 0 0 12px; color: var(--muted); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .footer {
+      padding: 32px 10vw 48px;
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .footer a { color: var(--text); }
+
+    @media (max-width: 960px) {
+      header { grid-template-columns: 1fr; padding-top: 48px; }
+      .cta-group { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <span class="tag">Open Source</span>
+      <h1>MLR-X 1.0 — Multiple Linear Regression without limits</h1>
+      <p class="lead">
+        Desktop tool to fit and diagnose multiple linear regression models on
+        small or large datasets, with optimized routines and interactive
+        visualization support.
+      </p>
+      <div class="cta-group">
+        <a class="btn" href="https://github.com/Jacksonalcazar/MLR-X" target="_blank" rel="noreferrer">GitHub repository</a>
+        <a class="btn secondary" href="https://www.paypal.com/donate?business=jacksonalcazar@gmail.com&currency_code=USD" target="_blank" rel="noreferrer">Support the project</a>
+      </div>
+    </div>
+    <div class="mockup" aria-label="Interface preview">
+      <div class="badge">Production-ready GUI + CLI</div>
+      <code>
+$ mlrx run --dataset data.csv --target Sales
+Training... ✔️  Best predictors: 14
+Metrics: R² = 0.92, RMSE = 0.37
+Exported to: results/report.html
+      </code>
+    </div>
+  </header>
+
+  <section>
+    <h2 class="section-title">Why choose MLR-X?</h2>
+    <div class="grid features">
+      <div class="card">
+        <h3>Scalable and efficient</h3>
+        <p>Process small or large datasets with parallel execution and lazy loading of heavy libraries.</p>
+      </div>
+      <div class="card">
+        <h3>GUI and CLI modes</h3>
+        <p>Intuitive graphical interface for fast exploration or a command line for reproducible pipelines.</p>
+      </div>
+      <div class="card">
+        <h3>Reports and diagnostics</h3>
+        <p>Includes validations, standard metrics (MAE, MSE, R²), and outputs ready for export.</p>
+      </div>
+      <div class="card">
+        <h3>Open source</h3>
+        <p>Distributed under AGPL-3.0; contribute, review the code, and build extensions on an open base.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Official downloads</h2>
+    <p style="color: var(--muted); margin-bottom: 18px;">
+      Choose the packaged build for your system. Each download ships with ready-to-use executables.
+    </p>
+    <div class="grid downloads">
+      <div class="card">
+        <h3>MLR-X for Linux</h3>
+        <p>Packaged binary for modern Linux distributions.</p>
+        <a class="btn" href="https://mega.nz/file/TctQQK5Z#fBb6ycWS131tES6uGPAT0fBVN9wMLs7tC7eLtUcKOuI" target="_blank" rel="noreferrer">Download</a>
+      </div>
+      <div class="card">
+        <h3>MLR-X for macOS</h3>
+        <p>Universal build for Apple Silicon and Intel (coming soon).</p>
+        <button class="btn secondary" type="button" aria-label="macOS build coming soon" disabled>Download coming soon</button>
+      </div>
+      <div class="card">
+        <h3>MLR-X Windows (GUI)</h3>
+        <p>Desktop app with the full graphical interface.</p>
+        <a class="btn" href="https://mega.nz/file/3VNGQZRB#Kw675BSnGPrD5n0XijCTr7tGINYj5R0001UsXGdi_Mw" target="_blank" rel="noreferrer">Download</a>
+      </div>
+      <div class="card">
+        <h3>MLR-X Windows (GUI + CLI)</h3>
+        <p>Includes the graphical app and the command-line utility in one package.</p>
+        <a class="btn" href="https://mega.nz/file/CZVzBBpJ#BRKhlurKfEEDcDVXl97B0mBg314LTYOQ_MMXw9rTjLE" target="_blank" rel="noreferrer">Download</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Project resources</h2>
+    <div class="grid features">
+      <div class="card">
+        <h3>Documentation</h3>
+        <p>Read the user guide and examples directly in the repository.</p>
+        <a href="https://github.com/Jacksonalcazar/MLR-X/manual/MLR-X_manual_1.0.pdf" target="_blank" rel="noreferrer">Open manual</a>
+      </div>
+      <div class="card">
+        <h3>Report issues</h3>
+        <p>Open a GitHub issue to request enhancements or report bugs.</p>
+        <a href="https://github.com/Jacksonalcazar/MLR-X/issues" target="_blank" rel="noreferrer">Create issue</a>
+      </div>
+      <div class="card">
+        <h3>Academic citation</h3>
+        <p>Cite MLR-X 1.0 in your publications using the recommended format.</p>
+        <code style="display:block; background:#0b132b; color:var(--accent); padding:10px; border-radius:8px;">Alcázar, Jackson J. "MLR-X 1.0: A Scalable Software for Multiple Linear Regression on Small and Large Datasets".</code>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span>© 2025 MLR-X — Distributed under AGPL-3.0.</span>
+    <a href="https://github.com/Jacksonalcazar/MLR-X" target="_blank" rel="noreferrer">Source code</a>
+    <a href="mailto:jacksonalcazar@gmail.com">Contact</a>
+  </div>
+</body>
+</html>
