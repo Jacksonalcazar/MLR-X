@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=1200, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>MLR-X | Multiple Linear Regression at Scale</title>
   <style>
     :root {
@@ -23,13 +23,22 @@
       color: var(--text);
       line-height: 1.6;
       min-height: 100vh;
+      min-width: 1200px;
+      overflow-x: auto;
+    }
+
+    .page {
+      width: 1200px;
+      max-width: 1200px;
+      min-width: 1200px;
+      margin: 0 auto;
     }
 
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
     header {
-      padding: 64px 10vw 40px;
+      padding: 64px 32px 40px;
       display: grid;
       grid-template-columns: 1.2fr 1fr;
       gap: 48px;
@@ -107,7 +116,7 @@
     }
 
     section {
-      padding: 32px 10vw 8px;
+      padding: 32px 32px 8px;
     }
 
     .section-title {
@@ -156,7 +165,7 @@
     }
 
     .footer {
-      padding: 32px 10vw 48px;
+      padding: 32px 32px 48px;
       color: var(--muted);
       font-size: 14px;
       display: flex;
@@ -167,14 +176,10 @@
     }
 
     .footer a { color: var(--text); }
-
-    @media (max-width: 960px) {
-      header { grid-template-columns: 1fr; padding-top: 48px; }
-      .cta-group { width: 100%; }
-    }
   </style>
 </head>
 <body>
+  <div class="page">
   <header>
     <div>
       <span class="tag">Open Source</span>
@@ -227,6 +232,7 @@ Status: Finished ✔️  Exported 5000 models → models.csv
         <h3>Open source</h3>
         <p>Distributed under AGPL-3.0; contribute, review the code, and build extensions on an open base with citation guidance.</p>
       </div>
+    </div>
   </section>
 
   <section>
@@ -284,6 +290,7 @@ Status: Finished ✔️  Exported 5000 models → models.csv
     <span>© 2025 MLR-X — Distributed under AGPL-3.0.</span>
     <a href="https://github.com/Jacksonalcazar/MLR-X" target="_blank" rel="noreferrer">Source code</a>
     <a href="mailto:jjalcazar.dev@gmail.com">Contact</a>
+  </div>
   </div>
 </body>
 </html>
