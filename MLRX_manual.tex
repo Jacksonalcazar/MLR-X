@@ -240,11 +240,13 @@ Provides per-observation diagnostics and the correlation matrix for the active m
 \subsection{\textbf{Summary} tab}
 \begin{itemize}
   \item Model selector with status plus a \emph{Use recommended covariance} toggle (runs BP/White and leverage diagnostics before applying the suggested estimator).
-  \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, k-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
+  \item Overview: regression type, chosen covariance, search method, iterations per seed, target metric, models explored/found/reported (with threshold), significance level, observation counts, dependent variable, predictor list, $k$-fold plan, CPU times, clip-prediction bounds, and Y-randomization status.
   \item Covariance diagnostics (when the recommendation is enabled): recommended/applied type, Breusch--Pagan and White $p$-values, leverage threshold, maximum leverage, high-leverage count, and notes that triggered the robust choice.
-  \item Coefficients and equation: coefficient table with standard errors, $t$, $p$ ($p$-values), and confidence intervals; equations rendered with and without errors.
+  \item Coefficients and equation: coefficient table with standard errors, $t$, $p$ ($p$-values), confidence intervals, and variable contribution percentages; equations rendered with and without errors.
   \item Metrics including training performance, internal validation based on leave-one-out and repeated $k$-fold cross-validation, and external validation.
+  \item Additional diagnostic metrics: global model significance (F-statistic and its $p$-value), likelihood-based criteria (log-likelihood, AIC, BIC), residual diagnostics (Durbin--Watson, skewness, kurtosis, Jarque--Bera and Omnibus tests with associated probabilities), numerical stability indicators (condition number), and agreement measures (Lin’s concordance correlation coefficient, CCC).
 \end{itemize}
+
 
 \subsection{\textbf{Desktop} tab (Variable Explorer)}
 \begin{itemize}
