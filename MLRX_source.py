@@ -172,7 +172,7 @@ VERSION = "1.0"
 def _default_parallel_jobs() -> int:
     return max(1, os.cpu_count() or 1)
 MLRX_HOMEPAGE_URL = "https://jacksonalcazar.github.io/MLR-X"
-MANUAL_URL = "https://github.com/Jacksonalcazar/MLR-X/manual/MLR-X_manual_1.0.pdf"
+MANUAL_URL = "https://mega.nz/file/SZNDHbKQ#ISZaujnuZ3Lsp27smx6GZI0S1jjLAhOiI2xeu_qHlWM"
 BUG_REPORT_URL = "https://github.com/Jacksonalcazar/MLR-X/issues"
 PAYPAL_DONATION_URL = "https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG"
 
@@ -856,9 +856,9 @@ CONFIG_LIST_OPTIONS = {
         (key, label) for key, label in CONFIG_TARGET_METRIC_DISPLAY.items()
     ],
     "split_mode": [
-        ("none", "No split (use full dataset)"),
-        ("random", "Random split"),
-        ("manual", "Manual split"),
+        ("none", "None (use full dataset)"),
+        ("random", "Random"),
+        ("manual", "Manual"),
     ],
 }
 
@@ -928,7 +928,7 @@ CONFIG_FIELD_LABELS: dict[str, str] = {
     "vif_threshold": "VIF threshold",
     "tm_cutoff": "Target metric cutoff",
     "export_limit": "Top models to export",
-    "n_jobs": "Parallel jobs",
+    "n_jobs": "CPU cores to use",
     "clip_enabled": "Clip predictions",
     "clip_low": "Clip lower bound",
     "clip_high": "Clip upper bound",
@@ -1321,7 +1321,9 @@ def write_configuration_file(
         lines.append(_format_field_line("clip_high", ""))
 
     lines.append("")
-    lines.append("# Output")
+    lines.append("-------")
+    lines.append("Output")
+    lines.append("-------")
     lines.append(_format_field_line("output_path", Path(output_path)))
 
     contents = "\n".join(lines) + "\n"
@@ -3982,7 +3984,6 @@ class MLRXApp(tk.Tk):
         self._main_ui_initialized = False
         self._current_tab_id: Optional[str] = None
         self._citation_window: Optional[tk.Toplevel] = None
-        self._donation_window: Optional[tk.Toplevel] = None
         self._help_tab_initialized = False
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -4287,7 +4288,7 @@ class MLRXApp(tk.Tk):
 
         ttk.Radiobutton(
             split_frame,
-            text="No split (use full dataset)",
+            text="None (use full dataset)",
             variable=self.split_mode,
             value="none",
             command=self._update_split_controls,
@@ -4305,7 +4306,7 @@ class MLRXApp(tk.Tk):
         )
         ttk.Radiobutton(
             random_row,
-            text="Random split",
+            text="Random",
             variable=self.split_mode,
             value="random",
             command=self._update_split_controls,
@@ -4321,7 +4322,7 @@ class MLRXApp(tk.Tk):
 
         ttk.Radiobutton(
             split_frame,
-            text="Manual split",
+            text="Manual",
             variable=self.split_mode,
             value="manual",
             command=self._update_split_controls,
@@ -4482,7 +4483,7 @@ class MLRXApp(tk.Tk):
             ("VIF threshold", "vif_threshold"),
             ("", "tm_cutoff"),
             ("Top models to report", "export_limit"),
-            ("Parallel jobs", "n_jobs"),
+            ("CPU cores to use", "n_jobs"),
         ]
 
         hint_tooltips = {
@@ -4859,9 +4860,9 @@ class MLRXApp(tk.Tk):
             "Variables": "Predictors",
             "RMSE_ext": "RMSE (ext)",
             "MAE_ext": "MAE (ext)",
-            "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F?",
-            "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F?",
-            "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F?",
+            "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F1",
+            "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F2",
+            "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F3",
             "N_var": "N pred",
         }
         self.external_results_tree = ttk.Treeview(
@@ -5054,38 +5055,7 @@ class MLRXApp(tk.Tk):
         webbrowser.open_new_tab(BUG_REPORT_URL)
 
     def _open_donation_window(self) -> None:
-        if self._donation_window is not None and tk.Toplevel.winfo_exists(self._donation_window):
-            self._donation_window.deiconify()
-            self._donation_window.lift()
-            return
-
-        window = tk.Toplevel(self)
-        window.title("Donate to MLR-X")
-        window.transient(self)
-        window.resizable(False, False)
-
-        content = ttk.Frame(window, padding=20)
-        content.pack(fill="both", expand=True)
-        self._center_dialog(window)
-        window.grab_set()
-        window.focus_set()
-
-        donate_btn = ttk.Button(
-            content,
-            text="Donate with PayPal",
-            command=self._launch_paypal_donation,
-        )
-        donate_btn.pack()
-
-        def on_close() -> None:
-            self._donation_window = None
-            window.destroy()
-
-        close_btn = ttk.Button(content, text="Close", command=on_close)
-        close_btn.pack(pady=(10, 0))
-
-        window.protocol("WM_DELETE_WINDOW", on_close)
-        self._donation_window = window
+        self._launch_paypal_donation()
 
     def _launch_paypal_donation(self) -> None:
         webbrowser.open_new_tab(PAYPAL_DONATION_URL)
@@ -5141,6 +5111,8 @@ class MLRXApp(tk.Tk):
         if context is None:
             return False
         if context.test_df is not None and not context.test_df.empty:
+            return True
+        if context.external_df is not None and not context.external_df.empty:
             return True
         return False
 
@@ -8663,7 +8635,7 @@ class MLRXApp(tk.Tk):
                 + TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric)
                 + " cutoff: "
                 + _format_threshold_display(getattr(config, "tm_cutoff", None)),
-                f"Parallel jobs: {config.n_jobs}",
+                f"CPU cores to use: {config.n_jobs}",
             ]
         )
 
@@ -8684,7 +8656,7 @@ class MLRXApp(tk.Tk):
             return preview
 
         if split_mode == "none":
-            lines.append("Split mode: No split (all rows used for training)")
+            lines.append("Split mode: None (all rows used for training)")
         elif split_mode == "random":
             percent = float(split_settings.get("test_size", 0.0)) * 100.0
             lines.append(f"Split mode: Random ({percent:.0f}% of rows reserved for testing)")
@@ -8821,16 +8793,16 @@ class MLRXApp(tk.Tk):
             if allow_defaults:
                 n_jobs_value = defaults.n_jobs
             else:
-                raise ValueError("Parallel jobs must be a positive integer.")
+                raise ValueError("CPU cores to use must be a positive integer.")
         try:
             n_jobs_int = int(n_jobs_value)
         except (TypeError, ValueError) as exc:  # noqa: BLE001
-            raise ValueError("Parallel jobs must be a positive integer.") from exc
+            raise ValueError("CPU cores to use must be a positive integer.") from exc
         if n_jobs_int <= 0:
             if allow_defaults:
                 n_jobs_int = max(1, defaults.n_jobs)
             else:
-                raise ValueError("Parallel jobs must be a positive integer.")
+                raise ValueError("CPU cores to use must be a positive integer.")
         params["n_jobs"] = n_jobs_int
 
         mode_value = (self.iterations_mode_var.get() or ITERATION_MODE_AUTO).lower()
@@ -9976,7 +9948,7 @@ class SummaryTab(ttk.Frame):
 
     TRAINING_LABELS: dict[str, str] = {
         "R2": f"{R_SQUARED_SYMBOL} (train)",
-        "R2_adj": f"adj-{R_SQUARED_SYMBOL} (train)",
+        "R2_adj": f"adj-{R_SQUARED_SYMBOL}",
         "RMSE": "RMSE (train)",
         "MAE": "MAE (train)",
         "s": f"{STANDARD_ERROR_SYMBOL} (train)",
@@ -10016,9 +9988,9 @@ class SummaryTab(ttk.Frame):
     )
 
     EXTERNAL_LABELS: dict[str, str] = {
-        "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F?",
-        "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F?",
-        "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F?",
+        "Q2F1_ext": f"{Q_SQUARED_SYMBOL}F1",
+        "Q2F2_ext": f"{Q_SQUARED_SYMBOL}F2",
+        "Q2F3_ext": f"{Q_SQUARED_SYMBOL}F3",
         "RMSE_ext": "RMSE (ext)",
         "MAE_ext": "MAE (ext)",
     }
@@ -10566,12 +10538,18 @@ class SummaryTab(ttk.Frame):
             cov_label = f"{cov_label} (Recommended)"
         self.info_vars["cov_type"].set(cov_label or "-")
 
+        standardized_result, standardized_actual = self._compute_standardized_result(variables)
         self._populate_coefficients(
-            self._build_coefficients_rows(result, param_names)
+            self._build_coefficients_rows(result, param_names, standardized_result)
         )
         self._update_equations(result, param_names, dependent or "Dependent")
         self.info_vars["significance"].set(self._resolve_significance_level())
-        self._update_additional_metrics(result, variables)
+        self._update_additional_metrics(
+            result,
+            variables,
+            standardized_result=standardized_result,
+            standardized_actual=standardized_actual,
+        )
 
     def _format_count(self, value: float) -> str:
         if value is None or not np.isfinite(value):
@@ -10695,6 +10673,17 @@ class SummaryTab(ttk.Frame):
         if not np.isfinite(numeric):
             return "-"
         return f"{numeric:.4f}"
+
+    def _format_percent_value(self, value: object) -> str:
+        if value is None:
+            return "-"
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return "-"
+        if not np.isfinite(numeric):
+            return "-"
+        return f"{numeric:.2f}%"
 
     def _format_r2_threshold(self, value: object) -> str:
         if value is None:
@@ -10993,13 +10982,32 @@ class SummaryTab(ttk.Frame):
         return result, param_names
 
     def _build_coefficients_rows(
-        self, result, param_names: list[str]
+        self, result, param_names: list[str], standardized_result=None
     ) -> list[tuple[str, ...]]:
         params = result.params
         std_err = result.bse
         t_values = result.tvalues
         p_values = result.pvalues
         ci = result.conf_int(alpha=self._get_significance_alpha())
+        contribution_by_param: dict[str, float] = {}
+        if standardized_result is not None:
+            try:
+                std_params = np.asarray(standardized_result.params, dtype=np.float64)
+                if std_params.size == len(param_names):
+                    if "Intercept" in param_names:
+                        intercept_idx = param_names.index("Intercept")
+                        std_coefs = np.delete(std_params, intercept_idx)
+                        names = [name for name in param_names if name != "Intercept"]
+                    else:
+                        std_coefs = std_params
+                        names = list(param_names)
+                    abs_vals = np.abs(std_coefs)
+                    total = float(np.sum(abs_vals))
+                    if total > 0.0 and len(names) == len(abs_vals):
+                        for name, value in zip(names, abs_vals):
+                            contribution_by_param[name] = float(value / total * 100.0)
+            except Exception:
+                contribution_by_param = {}
         rows: list[tuple[str, ...]] = []
         for idx, name in enumerate(param_names):
             coef_text = self._format_metric_value(params[idx])
@@ -11008,7 +11016,10 @@ class SummaryTab(ttk.Frame):
             p_text = self._format_p_value(p_values[idx])
             ci_low = self._format_metric_value(ci[idx, 0])
             ci_high = self._format_metric_value(ci[idx, 1])
-            rows.append((name, coef_text, std_err_text, t_text, p_text, ci_low, ci_high))
+            contrib_text = self._format_percent_value(contribution_by_param.get(name))
+            rows.append(
+                (name, coef_text, std_err_text, t_text, p_text, ci_low, ci_high, contrib_text)
+            )
         return rows
 
     def _populate_coefficients(self, rows: list[tuple[str, ...]]) -> None:
@@ -11070,32 +11081,33 @@ class SummaryTab(ttk.Frame):
             pieces.append(f" {sign} {term}")
         return "".join(pieces)
 
-    def _update_additional_metrics(self, result, variables: list[str]) -> None:
-        standardized_result = None
-        standardized_actual: Optional[np.ndarray] = None
-        if self.context is not None:
-            try:
-                y_values = np.asarray(self.context.y_np, dtype=np.float64)
-                y_std = self._standardize_vector(y_values)
-                Xm = (
-                    take(self.context, variables)
-                    if variables
-                    else np.empty((y_std.shape[0], 0), dtype=np.float64)
-                )
-                Xm = np.asarray(Xm, dtype=np.float64)
-                X_std = self._standardize_matrix(Xm)
-                exog_std = np.c_[np.ones((X_std.shape[0], 1), dtype=np.float64), X_std]
-                standardized_result = sm.OLS(y_std, exog_std).fit()
-                standardized_actual = y_std
-            except Exception:
-                standardized_result = None
-                standardized_actual = None
+    def _compute_standardized_result(
+        self, variables: list[str]
+    ) -> tuple[Optional[Any], Optional[np.ndarray]]:
+        if self.context is None:
+            return None, None
+        try:
+            y_values = np.asarray(self.context.y_np, dtype=np.float64)
+        except Exception:
+            return None, None
+        if y_values.size == 0:
+            return None, None
+        try:
+            y_std = self._standardize_vector(y_values)
+            Xm = (
+                take(self.context, variables)
+                if variables
+                else np.empty((y_std.shape[0], 0), dtype=np.float64)
+            )
+            Xm = np.asarray(Xm, dtype=np.float64)
+            X_std = self._standardize_matrix(Xm)
+            exog_std = np.c_[np.ones((X_std.shape[0], 1), dtype=np.float64), X_std]
+            standardized_result = sm.OLS(y_std, exog_std).fit()
+            standardized_actual = y_std
+        except Exception:
+            return None, None
 
-        if (
-            standardized_result is not None
-            and self.use_recommended_covariance.get()
-            and self._covariance_diagnosis
-        ):
+        if self.use_recommended_covariance.get() and self._covariance_diagnosis:
             cov_type = self._covariance_diagnosis.get("applied_cov_type")
             if not cov_type:
                 cov_type = self._covariance_diagnosis.get("cov_type")
@@ -11111,6 +11123,20 @@ class SummaryTab(ttk.Frame):
                     )
                 except Exception:
                     pass
+        return standardized_result, standardized_actual
+
+    def _update_additional_metrics(
+        self,
+        result,
+        variables: list[str],
+        *,
+        standardized_result=None,
+        standardized_actual: Optional[np.ndarray] = None,
+    ) -> None:
+        if standardized_result is None or standardized_actual is None:
+            standardized_result, standardized_actual = self._compute_standardized_result(
+                variables
+            )
 
         metric_values: dict[str, float] = {
             key: float("nan") for _, key in self.ADDITIONAL_METRICS
@@ -11378,13 +11404,32 @@ class SummaryTab(ttk.Frame):
                 "   \U0001D45D",
                 f"   [{self._format_confint_quantile_label(lower_quantile)}",
                 f" {self._format_confint_quantile_label(upper_quantile)}]",
+                "% Contrib.",
             ],
             self.coefficient_rows,
-            [10, 8, 8, 7, 7, 9, 9],
+            [10, 8, 8, 7, 7, 9, 9, 10],
             "Coefficients not available.",
             extra_padding=1,
-            column_align=["left", "right", "center", "right", "right", "right", "right"],
-            header_align=["center", "center", "right", "center", "center", "center", "center"],
+            column_align=[
+                "left",
+                "right",
+                "center",
+                "right",
+                "right",
+                "right",
+                "right",
+                "right",
+            ],
+            header_align=[
+                "center",
+                "center",
+                "right",
+                "center",
+                "center",
+                "center",
+                "center",
+                "center",
+            ],
         )
         coefficients_width = self._measure_block_width(coefficients_table)
 
@@ -11908,7 +11953,7 @@ class SummaryTab(ttk.Frame):
                 [
                     (
                         label,
-                        self._wrap_text_block(description, 60),
+                        self._wrap_text_block(description, 70),
                     )
                     for _idx, label, description in notation_rows
                 ],
@@ -12188,7 +12233,7 @@ class ObservationDiagnosticsTab(ttk.Frame):
         ("Z_value", "Z value", 60, 10),
         ("Leverage", "Leverage", 80, 10),
         ("StdPredResid", "Std. residual", 120, 12),
-        ("StdPredResid_LOO", "Std. residual by LOO", 150, 12),
+        ("StdPredResid_LOO", "Std. residual (LOO)", 150, 12),
     )
 
     FILTER_OPTIONS: tuple[tuple[str, str], ...] = (
@@ -19873,7 +19918,7 @@ class VisualizationTab(ttk.Frame):
         ax = self.ax
         self._enforce_axis_ratio(ax)
         self._apply_gridlines(ax)
-        ylabel = "Std. residuals by LOO" if column.endswith("_LOO") else "Std. residuals"
+        ylabel = "Std. residuals (LOO)" if column.endswith("_LOO") else "Std. residuals"
         self._apply_axis_labels("Leverage", ylabel)
 
         sizes = float(self.point_size_var.get())
