@@ -167,6 +167,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 IS_WINDOWS = sys.platform.startswith("win")
 VERSION = "1.0"
+MIN_SEEDS = 1000
 
 
 def _default_parallel_jobs() -> int:
@@ -198,6 +199,26 @@ def _apply_parallel_jobs_policy(value: int, origin: Optional[str] = None) -> tup
     requested = max(1, int(value))
     sanitized = _coerce_parallel_jobs(requested)
     return sanitized, None
+
+
+def _compute_combination_total(predictor_count: int, max_vars: int) -> int:
+    if predictor_count <= 0 or max_vars <= 0:
+        return 0
+    max_size = min(max_vars, predictor_count)
+    total = sum(math.comb(predictor_count, k) for k in range(1, max_size + 1))
+    return max(int(total), 0)
+
+
+def _combination_efficiency_threshold(max_vars: int) -> int:
+    if max_vars <= 4:
+        return 2_000_000
+    return int((8 * max_vars - 30) * 1_000_000)
+
+
+def _recommend_search_method(predictor_count: int, max_vars: int) -> str:
+    total_combinations = _compute_combination_total(predictor_count, max_vars)
+    threshold = _combination_efficiency_threshold(max_vars)
+    return "all_subsets" if total_combinations <= threshold else "eprs"
 
 
 COVARIANCE_DISPLAY_TO_KEY: dict[str, str] = {
@@ -317,8 +338,8 @@ def _metric_threshold_value(config: EPRSConfig) -> float:
     return threshold
 
 METHOD_DISPLAY_TO_KEY = {
-    "EPR-S": "eprs",
     "All subsets (traditional)": "all_subsets",
+    "EPR-S": "eprs",
 }
 
 METHOD_KEY_TO_DISPLAY = {value: key for key, value in METHOD_DISPLAY_TO_KEY.items()}
@@ -431,8 +452,9 @@ class EPRSConfig:
     constant_threshold: float = 90.0
     excluded_observations: str = ""
     max_vars: int = 1
-    n_seeds: int = 1
+    n_seeds: int = MIN_SEEDS
     seed_size: int = 1
+    random_state: int = 42
     cov_type: str = COVARIANCE_DEFAULT_KEY
     signif_lvl: float = 0.05
     corr_threshold: float = 0.90
@@ -444,7 +466,7 @@ class EPRSConfig:
     clip_predictions: Optional[tuple[float, float]] = None
     export_limit: int = DEFAULT_EXPORT_LIMIT
     target_metric: str = "R2"
-    method: str = "eprs"
+    method: str = "all_subsets"
 
     def __post_init__(self) -> None:
         self.n_jobs = _coerce_parallel_jobs(self.n_jobs)
@@ -806,6 +828,7 @@ SETTINGS_NUMERIC_KEYS = [
     "max_vars",
     "n_seeds",
     "seed_size",
+    "random_state",
     "max_iterations_per_seed",
     "signif_lvl",
     "corr_threshold",
@@ -921,6 +944,7 @@ CONFIG_FIELD_LABELS: dict[str, str] = {
     "max_vars": "Max predictors per model",
     "n_seeds": "Number of seeds",
     "seed_size": "Seed size",
+    "random_state": "Random state",
     "iterations_mode": "Iterations per seed mode",
     "max_iterations_per_seed": "Max iterations per seed",
     "signif_lvl": "Significance level",
@@ -1108,7 +1132,7 @@ def _build_cli_metadata(
     metadata["split"] = _build_split_metadata_for_cli(split_settings)
 
     metadata["max_iterations_per_seed"] = _resolve_iterations_metadata_value(
-        getattr(config, "method", "eprs"),
+        getattr(config, "method", "all_subsets"),
         getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
         getattr(config, "max_iterations_per_seed", None),
         avg_iterations_per_seed,
@@ -1301,6 +1325,7 @@ def write_configuration_file(
     lines.append(_format_field_line("max_vars", config.max_vars))
     lines.append(_format_field_line("n_seeds", config.n_seeds))
     lines.append(_format_field_line("seed_size", config.seed_size))
+    lines.append(_format_field_line("random_state", config.random_state))
     lines.append(_format_field_line("signif_lvl", config.signif_lvl))
     lines.append(_format_field_line("corr_threshold", config.corr_threshold))
     lines.append(_format_field_line("vif_threshold", config.vif_threshold))
@@ -1431,7 +1456,7 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
     else:
         excluded_observations = excluded_observations_raw
 
-    method = values.get("method", "eprs")
+    method = values.get("method", "all_subsets")
     if method not in {value for value, _label in CONFIG_LIST_OPTIONS["method"]}:
         raise ValueError(f"Unknown search method: {method}")
 
@@ -1461,7 +1486,13 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         if manual_iterations <= 0:
             raise ValueError("Max iterations per seed must be greater than zero")
 
-    def _parse_positive_int(key: str, default: Optional[int] = None) -> int:
+    def _parse_positive_int(
+        key: str,
+        default: Optional[int] = None,
+        *,
+        min_value: Optional[int] = None,
+        min_warning: Optional[str] = None,
+    ) -> int:
         field_name = _display_config_field(key)
         text = values.get(key)
         if text in (None, ""):
@@ -1471,11 +1502,20 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         value_int = int(float(text))
         if value_int <= 0:
             raise ValueError(f"{field_name} must be greater than zero")
+        if min_value is not None and value_int < min_value:
+            warning_text = min_warning or f"{field_name} must be at least {min_value}."
+            print(f"Warning: {warning_text} Resetting to {min_value}.")
+            return min_value
         return value_int
 
     max_vars = _parse_positive_int("max_vars")
-    n_seeds = _parse_positive_int("n_seeds")
+    n_seeds = _parse_positive_int(
+        "n_seeds",
+        min_value=MIN_SEEDS,
+        min_warning="Only values greater than 1000 are allowed.",
+    )
     seed_size = _parse_positive_int("seed_size")
+    random_state = _parse_positive_int("random_state", default=42)
     signif_lvl = float(values.get("signif_lvl", 0.05))
     corr_threshold = float(values.get("corr_threshold", 0.90))
     vif_threshold = float(values.get("vif_threshold", 4.0))
@@ -1548,6 +1588,7 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         max_vars=max_vars,
         n_seeds=n_seeds,
         seed_size=seed_size,
+        random_state=random_state,
         cov_type=cov_type,
         signif_lvl=signif_lvl,
         corr_threshold=corr_threshold,
@@ -1589,15 +1630,15 @@ def export_results_to_csv_cli(
     else:
         var_lists = pd.Series([[] for _ in range(len(export_df))], index=export_df.index)
 
-    export_df["N_var"] = var_lists.apply(len)
-    export_df["Variables"] = var_lists.apply(
+    export_df["N_pred"] = var_lists.apply(len)
+    export_df["Predictors"] = var_lists.apply(
         lambda items: ", ".join(items) if items else "-"
     )
 
     columns = [
         "Model",
-        "Variables",
-        "N_var",
+        "Predictors",
+        "N_pred",
         "R2",
         "RMSE",
         "s",
@@ -1613,7 +1654,6 @@ def export_results_to_csv_cli(
         "RMSE_kfold",
         "s_kfold",
         "MAE_kfold",
-        "R2_ext",
         "Q2F1_ext",
         "Q2F2_ext",
         "Q2F3_ext",
@@ -1660,6 +1700,19 @@ def run_cli(config_path: Union[str, Path]) -> None:
         excluded_observations=config.excluded_observations,
     )
 
+    total_combos = _compute_combination_total(len(context.cols), config.max_vars)
+    threshold = _combination_efficiency_threshold(config.max_vars)
+    if config.method == "eprs" and total_combos <= threshold:
+        raise ValueError(
+            "Configuration not allowed: EPR-S is restricted for this configuration. "
+            "Please select the 'All subsets' method."
+        )
+    if config.method == "all_subsets" and total_combos > threshold:
+        print(
+            "Warning: This configuration may require substantial computation time. "
+            "It is recommended to switch to the EPR-S method for better efficiency."
+        )
+
     print(f"Dataset: {Path(config.data_path).name}")
     print(f"Predictors available: {len(context.cols)}")
     method_display = METHOD_KEY_TO_DISPLAY.get(config.method, config.method)
@@ -1668,6 +1721,7 @@ def run_cli(config_path: Union[str, Path]) -> None:
         print(f"Max predictors per model: {config.max_vars}")
         print(f"Number of seeds: {config.n_seeds}")
         print(f"Seed size: {config.seed_size}")
+        print(f"Random state: {config.random_state}")
         iteration_mode_desc = _format_iterations_mode_for_cli(config)
         print(f"Iterations per seed mode: {iteration_mode_desc}")
     elif (config.method or "").lower() == "all_subsets":
@@ -3484,7 +3538,7 @@ def run_eprs(
 
     log("Identifying correlated predictors...")
 
-    random.seed(42)
+    random.seed(getattr(config, "random_state", 42))
     all_vars = list(context.cols)
     starts = [random.sample(all_vars, config.seed_size) for _ in range(config.n_seeds)]
 
@@ -3985,6 +4039,13 @@ class MLRXApp(tk.Tk):
         self._current_tab_id: Optional[str] = None
         self._citation_window: Optional[tk.Toplevel] = None
         self._help_tab_initialized = False
+        self._last_efficiency_notice: Optional[str] = None
+        self._efficiency_notify_job: Optional[str] = None
+        self._last_efficiency_max_vars: Optional[int] = None
+        self._seed_minimum_job: Optional[str] = None
+        self.data_path_var.trace_add(
+            "write", lambda *_: self._reset_efficiency_notice_tracking()
+        )
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._show_splash_screen()
@@ -4368,8 +4429,9 @@ class MLRXApp(tk.Tk):
         self.constant_threshold_var.set(str(defaults.constant_threshold))
         self.params_vars = {
             "max_vars": tk.StringVar(value=""),
-            "n_seeds": tk.StringVar(value=""),
+            "n_seeds": tk.StringVar(value=str(defaults.n_seeds)),
             "seed_size": tk.StringVar(value=""),
+            "random_state": tk.StringVar(value=str(defaults.random_state)),
             "signif_lvl": tk.DoubleVar(value=defaults.signif_lvl),
             "corr_threshold": tk.DoubleVar(value=defaults.corr_threshold),
             "vif_threshold": tk.DoubleVar(value=defaults.vif_threshold),
@@ -4388,11 +4450,31 @@ class MLRXApp(tk.Tk):
         )
         self.method_choice = tk.StringVar(value=METHOD_KEY_TO_DISPLAY[defaults.method])
         self.method_choice.trace_add("write", lambda *_: self._on_method_change())
+        self.params_vars["max_vars"].trace_add(
+            "write", lambda *_: self._maybe_notify_method_efficiency()
+        )
+        self.params_vars["max_vars"].trace_add(
+            "write", lambda *_: self._update_seed_settings_summary()
+        )
+        self.params_vars["n_seeds"].trace_add(
+            "write", lambda *_: self._schedule_seed_minimum_enforcement()
+        )
 
         self.seed_entry: Optional[ttk.Entry] = None
         self.seed_size_entry: Optional[ttk.Entry] = None
         self.seed_recommend_btn: Optional[ttk.Button] = None
-        self.seed_size_recommend_btn: Optional[ttk.Button] = None
+        self.seed_settings_button: Optional[ttk.Button] = None
+        self.seed_settings_dialog: Optional[tk.Toplevel] = None
+        self.random_state_entry: Optional[ttk.Entry] = None
+        self.seed_size_mode = tk.StringVar(value="default")
+        self.seed_size_manual_var = tk.StringVar(value="")
+        self.random_state_mode = tk.StringVar(value="default")
+        self.random_state_manual_var = tk.StringVar(value="")
+        self.allow_small_seed_count = tk.BooleanVar(value=False)
+        self.seed_size_applied_var = tk.StringVar(value="")
+        self.random_state_applied_var = tk.StringVar(value="")
+        self.guardrail_applied_var = tk.StringVar(value="")
+        self.seed_settings_summary_var = tk.StringVar(value="")
         self.iterations_mode_var = tk.StringVar(value=ITERATION_MODE_AUTO)
         self.manual_iterations_var = tk.StringVar(value="")
         self.iterations_dialog: Optional[tk.Toplevel] = None
@@ -4477,7 +4559,6 @@ class MLRXApp(tk.Tk):
         labels = [
             ("Max predictors per model", "max_vars"),
             ("Number of seeds", "n_seeds"),
-            ("Seed size", "seed_size"),
             ("Significance level", "signif_lvl"),
             ("Correlation threshold", "corr_threshold"),
             ("VIF threshold", "vif_threshold"),
@@ -4487,8 +4568,7 @@ class MLRXApp(tk.Tk):
         ]
 
         hint_tooltips = {
-            "n_seeds": "At least the number of predictor columns.",
-            "seed_size": "About half of the max predictors per model.",
+            "n_seeds": "Values below 1000 are blocked unless you disable the guardrail in Seed settings.",
             "vif_threshold": "No greater than 5.",
             "corr_threshold": "Max allowed predictor correlation (0-1).",
             "signif_lvl": "0.05 is the recommended value. Use a smaller a for stricter criteria.",
@@ -4534,15 +4614,17 @@ class MLRXApp(tk.Tk):
 
             if key == "n_seeds":
                 self.seed_entry = entry
-                seed_controls = ttk.Frame(params_frame)
-                seed_controls.grid(row=idx, column=2, sticky="w", **settings_row_padding)
-                self.seed_recommend_btn = ttk.Button(
-                    seed_controls,
-                    text="Use minimum recommended value",
-                    command=self._set_seeds_to_predictors,
+                self.seed_settings_button = ttk.Button(
+                    entry_container,
+                    text="Seed settings",
+                    command=self._open_seed_settings_dialog,
                 )
-                self.seed_recommend_btn.pack(side="left")
-
+                self.seed_settings_button.pack(side="left", padx=(6, 0))
+                ttk.Label(
+                    entry_container,
+                    textvariable=self.seed_settings_summary_var,
+                    foreground="#666666",
+                ).pack(side="left", padx=(6, 0))
                 covariance_container = ttk.Frame(params_frame)
                 covariance_container.grid(
                     row=idx,
@@ -4561,16 +4643,6 @@ class MLRXApp(tk.Tk):
                     width=8,
                 )
                 covariance_combo.pack(side="left", padx=(5, 0))
-            elif key == "seed_size":
-                self.seed_size_entry = entry
-                seed_size_controls = ttk.Frame(params_frame)
-                seed_size_controls.grid(row=idx, column=2, sticky="w", **settings_row_padding)
-                self.seed_size_recommend_btn = ttk.Button(
-                    seed_size_controls,
-                    text="Use recommended value",
-                    command=self._set_seed_size_half,
-                )
-                self.seed_size_recommend_btn.pack(side="left")
             elif key == "max_vars":
                 target_container = ttk.Frame(params_frame)
                 target_container.grid(
@@ -5304,6 +5376,279 @@ class MLRXApp(tk.Tk):
         state = "normal" if self.constant_filter_enabled.get() else "disabled"
         self.constant_threshold_spin.configure(state=state)
 
+    def _open_seed_settings_dialog(self) -> None:
+        if (
+            self.seed_settings_dialog is not None
+            and tk.Toplevel.winfo_exists(self.seed_settings_dialog)
+        ):
+            try:
+                self.seed_settings_dialog.deiconify()
+                self.seed_settings_dialog.lift()
+            except tk.TclError:
+                pass
+            return
+
+        window = tk.Toplevel(self)
+        window.title("Seed settings")
+        window.resizable(False, False)
+        window.transient(self)
+        self.seed_settings_dialog = window
+        window.protocol("WM_DELETE_WINDOW", self._close_seed_settings_dialog)
+
+        container = ttk.Frame(window, padding=12)
+        container.pack(fill="both", expand=True)
+
+        seed_frame = ttk.LabelFrame(container, text="Seed size")
+        seed_frame.pack(fill="x", pady=(0, 10))
+        seed_frame.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            seed_frame,
+            text="Choose how many predictors are included in each random seed:",
+        ).pack(anchor="w", padx=10, pady=(8, 4))
+
+        default_seed = self._calculate_seed_size_default()
+        current_seed = self._safe_int(self.params_vars["seed_size"].get())
+        if default_seed is not None and current_seed == default_seed:
+            self.seed_size_mode.set("default")
+        elif current_seed is not None:
+            self.seed_size_mode.set("custom")
+        else:
+            self.seed_size_mode.set("default")
+
+        default_label = "Max predictors per model / 2 (Default)"
+        ttk.Radiobutton(
+            seed_frame,
+            text=default_label,
+            variable=self.seed_size_mode,
+            value="default",
+            command=self._toggle_seed_settings_entries,
+        ).pack(anchor="w", padx=10, pady=2)
+
+        custom_seed_row = ttk.Frame(seed_frame)
+        custom_seed_row.pack(anchor="w", padx=10, pady=(2, 8))
+        ttk.Radiobutton(
+            custom_seed_row,
+            text="Custom seed size:",
+            variable=self.seed_size_mode,
+            value="custom",
+            command=self._toggle_seed_settings_entries,
+        ).pack(side="left")
+        self.seed_size_entry = ttk.Entry(
+            custom_seed_row,
+            textvariable=self.seed_size_manual_var,
+            width=10,
+        )
+        self.seed_size_entry.pack(side="left", padx=(6, 0))
+
+        if self.seed_size_mode.get() == "custom" and current_seed is not None:
+            self.seed_size_manual_var.set(str(current_seed))
+        elif current_seed is None:
+            self.seed_size_manual_var.set("")
+
+        seed_status_row = ttk.Frame(seed_frame)
+        seed_status_row.pack(fill="x", padx=10, pady=(0, 8))
+        seed_status_row.columnconfigure(0, weight=1)
+        ttk.Label(
+            seed_status_row,
+            textvariable=self.seed_size_applied_var,
+            foreground="#666666",
+        ).grid(row=0, column=1, sticky="e")
+
+        reproducibility_frame = ttk.LabelFrame(container, text="Reproducibility")
+        reproducibility_frame.pack(fill="x", pady=(0, 10))
+        reproducibility_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            reproducibility_frame,
+            text=(
+                "Seeds are built at random; keep the same random state for reproducibility."
+            ),
+            wraplength=420,
+        ).pack(anchor="w", padx=10, pady=(8, 4))
+
+        current_random_state = self._safe_int(self.params_vars["random_state"].get())
+        if current_random_state == 42 or current_random_state is None:
+            self.random_state_mode.set("default")
+        else:
+            self.random_state_mode.set("custom")
+        if current_random_state not in (None, 42):
+            self.random_state_manual_var.set(str(current_random_state))
+        elif self.random_state_mode.get() == "custom":
+            self.random_state_manual_var.set("")
+
+        ttk.Radiobutton(
+            reproducibility_frame,
+            text="Random state = 42 (Default)",
+            variable=self.random_state_mode,
+            value="default",
+            command=self._toggle_seed_settings_entries,
+        ).pack(anchor="w", padx=10, pady=2)
+
+        custom_random_row = ttk.Frame(reproducibility_frame)
+        custom_random_row.pack(anchor="w", padx=10, pady=(2, 8))
+        ttk.Radiobutton(
+            custom_random_row,
+            text="Random state:",
+            variable=self.random_state_mode,
+            value="custom",
+            command=self._toggle_seed_settings_entries,
+        ).pack(side="left")
+        self.random_state_entry = ttk.Entry(
+            custom_random_row,
+            textvariable=self.random_state_manual_var,
+            width=10,
+        )
+        self.random_state_entry.pack(side="left", padx=(6, 0))
+
+        reproducibility_status_row = ttk.Frame(reproducibility_frame)
+        reproducibility_status_row.pack(fill="x", padx=10, pady=(0, 8))
+        reproducibility_status_row.columnconfigure(0, weight=1)
+        ttk.Label(
+            reproducibility_status_row,
+            textvariable=self.random_state_applied_var,
+            foreground="#666666",
+        ).grid(row=0, column=1, sticky="e")
+
+        guard_frame = ttk.LabelFrame(container, text="Number of seeds guardrail")
+        guard_frame.pack(fill="x", pady=(0, 10))
+        guard_frame.columnconfigure(0, weight=1)
+        ttk.Checkbutton(
+            guard_frame,
+            text="Allow fewer than 1000 seeds",
+            variable=self.allow_small_seed_count,
+            command=self._toggle_seed_minimum_enforcement,
+        ).pack(anchor="w", padx=10, pady=8)
+
+        guard_status_row = ttk.Frame(guard_frame)
+        guard_status_row.pack(fill="x", padx=10, pady=(0, 8))
+        guard_status_row.columnconfigure(0, weight=1)
+        ttk.Label(
+            guard_status_row,
+            textvariable=self.guardrail_applied_var,
+            foreground="#666666",
+        ).grid(row=0, column=1, sticky="e")
+
+        button_row = ttk.Frame(container)
+        button_row.pack(fill="x")
+        ttk.Button(button_row, text="Apply", command=self._apply_seed_settings).pack(
+            side="right"
+        )
+        ttk.Button(
+            button_row, text="Close", command=self._close_seed_settings_dialog
+        ).pack(side="right", padx=(0, 8))
+
+        self.seed_size_applied_var.set("")
+        self.random_state_applied_var.set("")
+        self.guardrail_applied_var.set("")
+        self._toggle_seed_settings_entries()
+        self._sync_seed_settings_controls()
+
+    def _close_seed_settings_dialog(self) -> None:
+        if self.seed_settings_dialog is None:
+            return
+        try:
+            self.seed_settings_dialog.destroy()
+        except tk.TclError:
+            pass
+        self.seed_settings_dialog = None
+        self.seed_size_entry = None
+        self.random_state_entry = None
+
+    def _toggle_seed_settings_entries(self) -> None:
+        if getattr(self, "seed_size_entry", None) is not None:
+            seed_state = "normal" if self.seed_size_mode.get() == "custom" else "disabled"
+            self.seed_size_entry.configure(state=seed_state)
+        if getattr(self, "random_state_entry", None) is not None:
+            random_state = (
+                "normal" if self.random_state_mode.get() == "custom" else "disabled"
+            )
+            self.random_state_entry.configure(state=random_state)
+
+    def _sync_seed_settings_controls(self) -> None:
+        method_key = METHOD_DISPLAY_TO_KEY.get(self.method_choice.get(), "all_subsets")
+        if method_key == "all_subsets":
+            if getattr(self, "seed_size_entry", None) is not None:
+                self.seed_size_entry.configure(state="disabled")
+            if getattr(self, "random_state_entry", None) is not None:
+                self.random_state_entry.configure(state="disabled")
+        else:
+            self._toggle_seed_settings_entries()
+
+    def _toggle_seed_minimum_enforcement(self) -> None:
+        if not self.allow_small_seed_count.get():
+            self._schedule_seed_minimum_enforcement()
+
+    def _apply_seed_settings(self) -> None:
+        if self.seed_size_mode.get() == "default":
+            default_seed = self._calculate_seed_size_default()
+            if default_seed is None:
+                messagebox.showerror(
+                    "Seed size",
+                    "Please enter a valid integer for the maximum predictors per model.",
+                )
+                return
+            self.params_vars["seed_size"].set(str(default_seed))
+        else:
+            seed_value = self._safe_int(self.seed_size_manual_var.get())
+            if seed_value is None or seed_value <= 0:
+                messagebox.showerror(
+                    "Seed size",
+                    "Please enter a positive integer for the seed size.",
+                )
+                return
+            max_vars = self._safe_int(self.params_vars["max_vars"].get())
+            if max_vars is None or max_vars <= 0:
+                messagebox.showerror(
+                    "Seed size",
+                    "Please enter a valid integer for the maximum predictors per model.",
+                )
+                return
+            if seed_value > max_vars:
+                messagebox.showerror(
+                    "Seed size",
+                    "Seed size must be less than or equal to max predictors per model.",
+                )
+                return
+            self.params_vars["seed_size"].set(str(seed_value))
+
+        if self.random_state_mode.get() == "default":
+            self.params_vars["random_state"].set("42")
+        else:
+            random_state = self._safe_int(self.random_state_manual_var.get())
+            if random_state is None or random_state <= 0:
+                messagebox.showerror(
+                    "Random state",
+                    "Please enter a positive integer for the random state.",
+                )
+                return
+            self.params_vars["random_state"].set(str(random_state))
+
+        self.seed_size_applied_var.set("Changes applied!")
+        self.random_state_applied_var.set("Changes applied!")
+        self.guardrail_applied_var.set("Changes applied!")
+        self._update_seed_settings_summary()
+
+    def _calculate_seed_size_default(self) -> Optional[int]:
+        max_vars = self._safe_int(self.params_vars["max_vars"].get())
+        if max_vars is None or max_vars <= 0:
+            return None
+        if max_vars % 2 == 0:
+            return max_vars // 2
+        return max_vars // 2 + 1
+
+    def _update_seed_settings_summary(self) -> None:
+        seed_size = self._safe_int(self.params_vars["seed_size"].get())
+        random_state = self._safe_int(self.params_vars["random_state"].get())
+        default_seed = self._calculate_seed_size_default()
+
+        parts: list[str] = []
+        if seed_size is not None and default_seed is not None and seed_size != default_seed:
+            parts.append(f"Seed size: {seed_size}")
+        if random_state is not None and random_state != 42:
+            parts.append(f"Random state: {random_state}")
+
+        self.seed_settings_summary_var.set("; ".join(parts))
+
     def _open_iterations_dialog(self) -> None:
         if (
             self.iterations_dialog is not None
@@ -5528,23 +5873,150 @@ class MLRXApp(tk.Tk):
 
     def _on_method_change(self, *_args):
         display_value = self.method_choice.get()
-        method_key = METHOD_DISPLAY_TO_KEY.get(display_value, "eprs")
+        method_key = METHOD_DISPLAY_TO_KEY.get(display_value, "all_subsets")
         seed_state = "disabled" if method_key == "all_subsets" else "normal"
         button_state = "disabled" if method_key == "all_subsets" else "normal"
 
-        if self.seed_entry is not None:
+        if self.seed_entry is not None and self.seed_entry.winfo_exists():
             self.seed_entry.configure(state=seed_state)
-        if self.seed_size_entry is not None:
+        if self.seed_size_entry is not None and self.seed_size_entry.winfo_exists():
             self.seed_size_entry.configure(state=seed_state)
-        if self.seed_recommend_btn is not None:
+        if self.seed_recommend_btn is not None and self.seed_recommend_btn.winfo_exists():
             self.seed_recommend_btn.configure(state=button_state)
-        if self.seed_size_recommend_btn is not None:
-            self.seed_size_recommend_btn.configure(state=button_state)
+        if self.seed_settings_button is not None and self.seed_settings_button.winfo_exists():
+            self.seed_settings_button.configure(state=button_state)
+        if (
+            self.seed_settings_dialog is not None
+            and self.seed_settings_dialog.winfo_exists()
+        ):
+            self._sync_seed_settings_controls()
+        elif self.seed_settings_dialog is not None:
+            self.seed_settings_dialog = None
         if self.iterations_button is not None:
             self.iterations_button.configure(state=button_state)
         self._set_iteration_mode_display_state(button_state == "disabled")
+        self._maybe_notify_method_efficiency()
 
         return method_key
+
+    def _load_context_for_efficiency(self) -> EPRSContext:
+        path = self.data_path_var.get()
+        if not path:
+            raise ValueError("Please select a dataset.")
+        delimiter = self._get_delimiter(self.delimiter_var.get())
+        split_settings = self._gather_split_settings()
+        exclude_constant, constant_threshold = self._get_constant_filter()
+        return load_dataset(
+            path,
+            delimiter=delimiter,
+            split=split_settings,
+            dependent_choice=self._get_dependent_choice(),
+            non_variable_spec=self._get_non_variable_spec(),
+            exclude_constant=exclude_constant,
+            constant_threshold=constant_threshold,
+            excluded_observations=self._get_excluded_observations_text(),
+        )
+
+    def _maybe_notify_method_efficiency(self) -> None:
+        if self._efficiency_notify_job is not None:
+            try:
+                self.after_cancel(self._efficiency_notify_job)
+            except Exception:  # noqa: BLE001
+                pass
+            self._efficiency_notify_job = None
+        self._efficiency_notify_job = self.after(1000, self._notify_method_efficiency)
+
+    def _reset_efficiency_notice_tracking(self) -> None:
+        if self._efficiency_notify_job is not None:
+            try:
+                self.after_cancel(self._efficiency_notify_job)
+            except Exception:  # noqa: BLE001
+                pass
+            self._efficiency_notify_job = None
+        self._last_efficiency_notice = None
+        self._last_efficiency_max_vars = None
+        self._maybe_notify_method_efficiency()
+
+    def _schedule_seed_minimum_enforcement(self) -> None:
+        if self._seed_minimum_job is not None:
+            try:
+                self.after_cancel(self._seed_minimum_job)
+            except Exception:  # noqa: BLE001
+                pass
+            self._seed_minimum_job = None
+        self._seed_minimum_job = self.after(1000, self._enforce_seed_minimum)
+
+    def _enforce_seed_minimum(self) -> None:
+        self._seed_minimum_job = None
+        if self.allow_small_seed_count.get():
+            return
+        raw_value = self.params_vars["n_seeds"].get().strip()
+        if not raw_value:
+            return
+        try:
+            seed_value = int(float(raw_value))
+        except (TypeError, ValueError):
+            return
+        if seed_value < MIN_SEEDS:
+            messagebox.showwarning(
+                "Number of seeds",
+                "Only values greater than 1000 are allowed. Resetting to 1000.",
+            )
+            self.params_vars["n_seeds"].set(str(MIN_SEEDS))
+
+    def _notify_method_efficiency(self) -> None:
+        self._efficiency_notify_job = None
+        raw_max_vars = self.params_vars["max_vars"].get().strip()
+        if not raw_max_vars:
+            self._last_efficiency_notice = None
+            return
+        try:
+            max_vars = int(raw_max_vars)
+        except (TypeError, ValueError):
+            return
+        if max_vars <= 0:
+            return
+        if self._last_efficiency_max_vars is None or max_vars != self._last_efficiency_max_vars:
+            self._last_efficiency_notice = None
+            self._last_efficiency_max_vars = max_vars
+        try:
+            context = self._load_context_for_efficiency()
+        except Exception as exc:  # noqa: BLE001
+            if not isinstance(exc, FileNotFoundError):
+                messagebox.showerror(
+                    "Max predictors per model",
+                    "Unable to compute combinations:\n" + str(exc),
+                )
+            return
+        predictor_count = len(context.cols)
+        if predictor_count <= 0:
+            messagebox.showerror(
+                "Max predictors per model",
+                "No predictor columns were detected in the current configuration.",
+            )
+            return
+        total_combos = _compute_combination_total(predictor_count, max_vars)
+        threshold = _combination_efficiency_threshold(max_vars)
+        method_key = METHOD_DISPLAY_TO_KEY.get(self.method_choice.get(), "all_subsets")
+        notice_key = None
+        if method_key == "eprs" and total_combos <= threshold:
+            notice_key = "suggest_all_subsets"
+        elif method_key == "all_subsets" and total_combos > threshold:
+            notice_key = "suggest_eprs"
+
+        if notice_key == self._last_efficiency_notice:
+            return
+        self._last_efficiency_notice = notice_key
+        if notice_key == "suggest_all_subsets":
+            messagebox.showinfo(
+                "Search method guidance",
+                'For the chosen maximum number of predictors, it is more efficient to use the "All subsets" method.',
+            )
+        elif notice_key == "suggest_eprs":
+            messagebox.showinfo(
+                "Search method guidance",
+                "For the selected maximum number of predictors, it is more efficient to use the EPR-S method.",
+            )
 
     def _set_seeds_to_predictors(self):
         path = self.data_path_var.get()
@@ -6358,7 +6830,7 @@ class MLRXApp(tk.Tk):
 
         max_iterations = getattr(config, "max_iterations_per_seed", None)
         metadata["max_iterations_per_seed"] = _resolve_iterations_metadata_value(
-            getattr(config, "method", "eprs"),
+            getattr(config, "method", "all_subsets"),
             getattr(config, "iterations_mode", ITERATION_MODE_AUTO),
             max_iterations,
             avg_iterations_per_seed,
@@ -6427,7 +6899,7 @@ class MLRXApp(tk.Tk):
                 "excluded_observations", (self.exclude_obs_var.get().strip() or "none")
             )
             if "method" not in metadata:
-                metadata["method"] = "eprs"
+                metadata["method"] = "all_subsets"
 
         models_found_value = (
             self.summary_tab.get_models_found()
@@ -6640,6 +7112,10 @@ class MLRXApp(tk.Tk):
             df = pd.read_csv(buffer)
 
         df = df.copy()
+        if "Predictors" in df.columns and "Variables" not in df.columns:
+            df = df.rename(columns={"Predictors": "Variables"})
+        if "N_pred" in df.columns and "N_var" not in df.columns:
+            df = df.rename(columns={"N_pred": "N_var"})
         metadata_column: Optional[str] = None
         for column in df.columns:
             if not isinstance(column, str):
@@ -6741,7 +7217,6 @@ class MLRXApp(tk.Tk):
             if model_value is None or (valid_models and model_value not in valid_models):
                 continue
             metrics = {
-                "R2_ext": self._safe_float(row.get("R2_ext")),
                 "Q2F1_ext": self._safe_float(row.get("Q2F1_ext")),
                 "Q2F2_ext": self._safe_float(row.get("Q2F2_ext")),
                 "Q2F3_ext": self._safe_float(row.get("Q2F3_ext")),
@@ -6977,8 +7452,8 @@ class MLRXApp(tk.Tk):
 
         columns = [
             "Model",
-            "Variables",
-            "N_var",
+            "Predictors",
+            "N_pred",
             "R2",
             "RMSE",
             "s",
@@ -6994,10 +7469,9 @@ class MLRXApp(tk.Tk):
             "RMSE_kfold",
             "s_kfold",
             "MAE_kfold",
-            "R2_ext",
-            "Q2F1_ext",
-            "Q2F2_ext",
-            "Q2F3_ext",
+        "Q2F1_ext",
+        "Q2F2_ext",
+        "Q2F3_ext",
             "RMSE_ext",
             "s_ext",
             "MAE_ext",
@@ -7033,8 +7507,8 @@ class MLRXApp(tk.Tk):
             variables_list = self._normalize_variables(row.get("Variables"))
             record: dict[str, object] = {
                 "Model": model_value,
-                "Variables": ", ".join(variables_list) if variables_list else "-",
-                "N_var": len(variables_list),
+                "Predictors": ", ".join(variables_list) if variables_list else "-",
+                "N_pred": len(variables_list),
                 "R2": self._safe_float(row.get("R2")),
                 "RMSE": self._safe_float(row.get("RMSE")),
                 "s": self._safe_float(row.get("s")),
@@ -7050,7 +7524,6 @@ class MLRXApp(tk.Tk):
                 "RMSE_kfold": self._safe_float(row.get("RMSE_kfold")),
                 "s_kfold": self._safe_float(row.get("s_kfold")),
                 "MAE_kfold": self._safe_float(row.get("MAE_kfold")),
-                "R2_ext": self._safe_float(row.get("R2_ext")),
                 "Q2F1_ext": self._safe_float(row.get("Q2F1_ext")),
                 "Q2F2_ext": self._safe_float(row.get("Q2F2_ext")),
                 "Q2F3_ext": self._safe_float(row.get("Q2F3_ext")),
@@ -7078,7 +7551,6 @@ class MLRXApp(tk.Tk):
             if external_row:
                 record.update(
                     {
-                        "R2_ext": self._safe_float(external_row.get("R2_ext")),
                         "Q2F1_ext": self._safe_float(external_row.get("Q2F1_ext")),
                         "Q2F2_ext": self._safe_float(external_row.get("Q2F2_ext")),
                         "Q2F3_ext": self._safe_float(external_row.get("Q2F3_ext")),
@@ -7369,6 +7841,21 @@ class MLRXApp(tk.Tk):
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Configuration error", str(exc))
             return
+
+        total_combos = _compute_combination_total(len(context.cols), config.max_vars)
+        threshold = _combination_efficiency_threshold(config.max_vars)
+        if config.method == "eprs" and total_combos <= threshold:
+            messagebox.showerror(
+                "Configuration error",
+                "EPR-S is restricted for this configuration. Please select the 'All subsets' method.",
+            )
+            return
+        if config.method == "all_subsets" and total_combos > threshold:
+            messagebox.showwarning(
+                "Configuration warning",
+                "This configuration may require substantial computation time. "
+                "It is recommended to switch to the EPR-S method for better efficiency.",
+            )
 
         output_path = Path(destination)
         self.results_export_path = output_path
@@ -8577,7 +9064,7 @@ class MLRXApp(tk.Tk):
             max_size = min(config.max_vars, predictor_count)
             if predictor_count <= 0 or max_size <= 0:
                 return 1
-            total = sum(math.comb(predictor_count, k) for k in range(1, max_size + 1))
+            total = _compute_combination_total(predictor_count, max_size)
             return max(int(total), 1)
         return max(int(config.n_seeds), 1)
 
@@ -8722,6 +9209,7 @@ class MLRXApp(tk.Tk):
             "max_vars": "Max predictors per model",
             "n_seeds": "Number of seeds",
             "seed_size": "Seed size",
+            "random_state": "Random state",
         }
 
         for key, label in required_int_fields.items():
@@ -8744,6 +9232,13 @@ class MLRXApp(tk.Tk):
                     params[key] = max(1, getattr(defaults, key))
                     continue
                 raise ValueError(f"{label} must be a positive integer.")
+        if params["n_seeds"] < MIN_SEEDS and not self.allow_small_seed_count.get():
+            messagebox.showwarning(
+                "Number of seeds",
+                "Only values greater than 1000 are allowed. Resetting to 1000.",
+            )
+            params["n_seeds"] = MIN_SEEDS
+            self.params_vars["n_seeds"].set(str(MIN_SEEDS))
 
         params["data_path"] = data_path
         params["delimiter"] = self._get_delimiter(self.delimiter_var.get())
@@ -8906,12 +9401,14 @@ class MLRXApp(tk.Tk):
         self.params_vars["max_vars"].set(self._format_numeric_value(config.max_vars))
         self.params_vars["n_seeds"].set(self._format_numeric_value(config.n_seeds))
         self.params_vars["seed_size"].set(self._format_numeric_value(config.seed_size))
+        self.params_vars["random_state"].set(self._format_numeric_value(config.random_state))
         self.params_vars["signif_lvl"].set(config.signif_lvl)
         self.params_vars["corr_threshold"].set(config.corr_threshold)
         self.params_vars["vif_threshold"].set(config.vif_threshold)
         self.params_vars["tm_cutoff"].set(config.tm_cutoff)
         self.params_vars["export_limit"].set(config.export_limit)
         self.params_vars["n_jobs"].set(config.n_jobs)
+        self._update_seed_settings_summary()
 
         normalized_cov = COVARIANCE_KEY_NORMALIZED.get(
             config.cov_type.lower(), config.cov_type
@@ -20206,7 +20703,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     try:
         run_cli(config_path)
     except Exception as exc:  # noqa: BLE001
-        print(f"Error: {exc}", file=sys.stderr)
+        message = str(exc)
+        if message.startswith("Configuration not allowed:"):
+            print(message, file=sys.stderr)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
 
