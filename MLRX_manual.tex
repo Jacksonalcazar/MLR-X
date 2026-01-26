@@ -366,7 +366,7 @@ Results are exported to the specified CSV file using semicolon separation, with 
 \begin{itemize}
   \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models. A guardrail enforces a 1{,}000-seed minimum unless \emph{Allow fewer than 1000 seeds} is enabled.
   \item \textbf{Seed size}: sets the initial predictor count per seed; values near half the predictor limit balance exploration and computation.
-  \item \textbf{Random state}: seed for the EPR-S random number generator (default 42), used to build the seed list reproducibly across GUI, CLI, and configuration reloads.
+  \item \textbf{Random state (reproducibility)}: seed for the EPR-S random number generator (default 42), used to build the seed list reproducibly across GUI, CLI, and configuration reloads.
   \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, \emph{manual}, or \emph{converge} modes.
   \item \textbf{Max predictors per model}: maximum number of predictors permitted in any candidate model.
   \item \textbf{Significance level}: p-value threshold used for retaining regression coefficients during the model-refinement step.
