@@ -19,6 +19,7 @@
 \usepackage{hyperref}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{hyperref}  % o url
 \graphicspath{{./}}
 
 % ==== Styles ====
@@ -190,7 +191,7 @@ Choose how to partition the dataset for training and testing.
   \item \emph{Manual}: provide train/test lists or ranges without overlap.
 \end{itemize}
 Selecting \emph{None} keeps external validation available later from the Validation tab by loading a separate file.
-
+\newpage
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
     \item Search method: \textbf{All Subsets} (default) or \textbf{EPR-S} (Expand--Perturb--Reduce--Swap). For further details see section 6.
@@ -297,8 +298,11 @@ Summarizes product information and support links. The About panel shows the MLR-
 
 % =========================================================
 \section{Search algorithms}
+
 \subsection{EPR-S (Expand--Perturb--Reduce--Swap)}
-Heuristic search that runs per seed using the target metric, predictor cap, correlation threshold, VIF veto, and reporting thresholds defined in Setup \& Run. Each seed follows a deterministic loop:
+
+Heuristic search strategy designed for large datasets and high-dimensional subset limits, where exhaustive enumeration becomes computationally impractical. The algorithm operates per seed using the target metric, predictor cap, correlation threshold, VIF veto, and reporting thresholds defined in Setup \& Run. Each seed follows a deterministic loop:
+
 \begin{enumerate}
   \item Initialize with the seed's starting predictors and compute the baseline metric.
   \item \textbf{Expand}: add the single predictor that most improves the metric without violating the maximum predictors.
@@ -308,11 +312,20 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item \textbf{Swap recovery}: revisit previously dropped variables when swap logs suggest a possible gain.
   \item Stop when no further gains are observed after repeated passes or when the iteration budget per seed is reached. Quality filters such as significance level and multicollinearity are applied, retaining only unique, eligible models sorted by $R^2$.
 \end{enumerate}
-\medskip
-EPR-S runs are fully deterministic: for a fixed dataset, configuration options, and random state, the algorithm follows identical search paths and produces the same set of exported models. This property ensures full reproducibility of results and facilitates direct comparison across runs. EPR-S is an original search strategy developed for this software package (doi.org/xxxxx).
 
-\subsection{All subsets (exhaustive)}
-Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small because the number of combinations grows quickly. Combination-count helpers estimate the scale of the search and display guidance or warnings when the requested space is inefficient; the GUI presents a warning dialog and the CLI emits structured warnings, letting you decide whether to proceed.
+\medskip
+EPR-S runs are fully reproducible: for a fixed dataset, configuration options, and random state, the algorithm follows identical search paths and produces the same set of exported models. This property ensures full reproducibility of results and facilitates direct comparison across runs. By avoiding combinatorial enumeration and instead exploring the model space through guided local improvements, EPR-S achieves near-exhaustive recovery of top-ranked models at a fraction of the computational cost, making it particularly suitable for large-scale and high-dimensional regression problems. EPR-S is an original search strategy developed for this software package (doi.org/xxxxx).
+
+\subsection{All-subsets (traditional exhaustive search)}
+
+The all-subsets method (or best-subsets regression) is an exhaustive search strategy. It operates by explicitly enumerating and evaluating every possible combination of predictors, up to a user-defined limit. Because the number of possible models grows combinatorially with the number of predictors, this method quickly becomes computationally infeasible.
+
+Prior to model fitting, predictors are pre-filtered using the correlation threshold to remove highly collinear variables. During evaluation, variance inflation factor (VIF) constraints are enforced to control multicollinearity. The procedure includes the same export limits and reporting criteria used for EPR-S to ensure consistent benchmarking across engines.
+
+Because the computational cost increases exponentially with the number of predictors, this exhaustive approach is recommended only for small predictor spaces or low-dimensional subset limits, where complete enumeration remains computationally feasible.
+
+\medskip
+\noindent \textbf{Note}: The GUI presents a warning dialog and the CLI emits structured warnings to inform whether execution should proceed; combination-count helpers estimate the scale of the search and provide guidance when the requested combinatorial space becomes computationally inefficient or not feasible.
 
 % =========================================================
 
@@ -326,7 +339,7 @@ Enumerates every predictor combination up to \emph{Max predictors}, pre-filterin
 % =========================================================
 \section{Command-line (CLI) usage}
 Available on Linux and on the macOS and Windows GUI+CLI packages to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
-
+\newpage
 \subsection{Invocation}
 \begin{lstlisting}[style=mlrx]
 # Linux
@@ -337,7 +350,7 @@ Available on Linux and on the macOS and Windows GUI+CLI packages to run the full
 MLRX.exe config.conf or MLRX.exe path\to\config.conf
 \end{lstlisting}
 If additional arguments are supplied, the program shows the expected syntax and exits.
-Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"}).
+Paths containing spaces must be quoted (for example, \path{./MLRX "path/with space/config.conf"}).
 
 \subsection{Configuration file structure}
 A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
