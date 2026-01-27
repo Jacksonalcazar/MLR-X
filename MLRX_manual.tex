@@ -340,7 +340,7 @@ If additional arguments are supplied, the program shows the expected syntax and 
 Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"}).
 
 \subsection{Configuration file structure}
-A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, Seed settings for EPR-S, and Output) with parameters specified as key--value pairs. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
+A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
 \subsection{Execution and progress}
 The CLI prints \texttt{Loaded configuration from ...} before parsing so any parse-time warnings follow it. It then reports the dataset name, available predictors, selected search method, and—when using EPR-S—the active seed list, seed size, random state, and iteration budget. It validates parameter ranges, including manual iteration counts, split identifiers, and efficiency thresholds for the chosen search strategy. Inefficient or out-of-threshold configurations are reported as structured warnings (rather than hard errors), and runs continue with a \texttt{Press Ctrl+C to cancel analysis.} hint. A banner of asterisks frames the configuration summary, and if fewer than 1{,}000 seeds are used with the guardrail enabled, the CLI prints a low-seed warning noting potential performance impact. Live progress updates stream during model search or evaluation, as well as during VIF computations. Upon completion, the CLI summarizes the total models explored, those meeting the target-metric threshold, the filtered set retained after export limits, and the corresponding CPU times.
 
@@ -628,10 +628,9 @@ Excluded observation IDs = none
 Data splitting
 --------------
 # Split mode options:
-1) No split (use full dataset)
-2) Random split
-3) Manual split
-4) External validation dataset
+1) None (use full dataset)
+2) Random
+3) Manual
 Selected option: 1
 
 ---------
@@ -642,12 +641,6 @@ Settings
 2) EPR-S
 Selected option: 2
 
-# Iterations per seed mode options:
-1) auto
-2) manual (Max iterations per seed = none)
-3) Until converge
-Selected option: 1
-
 # Target metric options:
 1) R2
 2) adj-R2
@@ -656,7 +649,7 @@ Selected option: 1
 Selected option: 1
 
 # Covariance type options:
-1) Nonrobust
+1) Non robust
 2) HC0
 3) HC1
 4) HC2
@@ -664,9 +657,6 @@ Selected option: 1
 Selected option: 1
 
 Max predictors per model = 6
-Number of seeds = 1000
-Seed size = 3
-Random state = 42
 Significance level = 0.05
 Correlation threshold = 0.9
 VIF threshold = 4.0
@@ -674,15 +664,22 @@ Target metric cutoff = 0.8
 Top models to export = 5000
 CPU cores to use = 4
 
+# Seed settings for EPR-S
+Number of seeds = 1000
+Seed size = 3
+Random state = 42
+Allow fewer than 1000 seeds = deactivated
+
+# Iterations per seed mode options:
+1) auto
+2) manual (Max iterations per seed = none)
+3) Until converge
+Selected option: 1
+
 # Prediction clipping
 Clip predictions = false
 Clip lower bound = none
 Clip upper bound = none
-
-------------------------
-Seed settings for EPR-S
-------------------------
-Allow fewer than 1000 seeds = false
 
 -------
 Output
