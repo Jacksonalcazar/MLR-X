@@ -173,7 +173,7 @@ MIN_SEEDS = 1000
 def _default_parallel_jobs() -> int:
     return max(1, os.cpu_count() or 1)
 MLRX_HOMEPAGE_URL = "https://jacksonalcazar.github.io/MLR-X"
-MANUAL_URL = "https://mega.nz/file/SZNDHbKQ#ISZaujnuZ3Lsp27smx6GZI0S1jjLAhOiI2xeu_qHlWM"
+MANUAL_URL = "https://mega.nz/file/aJ9S0awL#i1BiWQaiTTtV0Luo44mdn4BFntyKktDEQ01FyL7TnCE"
 BUG_REPORT_URL = "https://github.com/Jacksonalcazar/MLR-X/issues"
 PAYPAL_DONATION_URL = "https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG"
 
@@ -455,6 +455,7 @@ class EPRSConfig:
     n_seeds: int = MIN_SEEDS
     seed_size: int = 1
     random_state: int = 42
+    allow_small_seed_count: bool = False
     cov_type: str = COVARIANCE_DEFAULT_KEY
     signif_lvl: float = 0.05
     corr_threshold: float = 0.90
@@ -723,8 +724,8 @@ def apply_axis_to_plot(ax: Axes, axis: str, params: AxisParameters) -> None:
 
 
 METHOD_INFO_TEXT = {
-    "EPR-S": "Up to 1000 variables or more.",
-    "All subsets (traditional)": "For fewer than 25 variables.",
+    "EPR-S": "Up to 1000 predictors or more.",
+    "All subsets (traditional)": "Feasible only for small combinatorial spaces.",
 }
 
 METADATA_PREFIX = "#Metadata:"
@@ -897,6 +898,10 @@ def _bool_to_text(value: bool) -> str:
     return "true" if value else "false"
 
 
+def _bool_to_activation_text(value: bool) -> str:
+    return "activated" if value else "deactivated"
+
+
 def _parse_bool(value: object, *, default: bool = False) -> bool:
     if value is None:
         return default
@@ -905,9 +910,9 @@ def _parse_bool(value: object, *, default: bool = False) -> bool:
     text = str(value).strip().lower()
     if not text:
         return default
-    if text in {"true", "1", "yes", "on"}:
+    if text in {"true", "1", "yes", "on", "activated"}:
         return True
-    if text in {"false", "0", "no", "off"}:
+    if text in {"false", "0", "no", "off", "deactivated"}:
         return False
     return default
 
@@ -945,6 +950,7 @@ CONFIG_FIELD_LABELS: dict[str, str] = {
     "n_seeds": "Number of seeds",
     "seed_size": "Seed size",
     "random_state": "Random state",
+    "allow_small_seed_count": "Allow fewer than 1000 seeds",
     "iterations_mode": "Iterations per seed mode",
     "max_iterations_per_seed": "Max iterations per seed",
     "signif_lvl": "Significance level",
@@ -1288,22 +1294,6 @@ def write_configuration_file(
         )
     )
 
-    iterations_mode_options = _build_iterations_mode_options(config)
-    lines.extend(
-        _format_option_block(
-            key="iterations_mode",
-            options=iterations_mode_options,
-            selected_value=config.iterations_mode,
-        )
-    )
-    if config.iterations_mode == ITERATION_MODE_MANUAL:
-        lines.append(
-            _format_field_line(
-                "max_iterations_per_seed", getattr(config, "max_iterations_per_seed", "")
-            )
-        )
-        lines.append("")
-
     target_options = CONFIG_LIST_OPTIONS["target_metric"]
     lines.extend(
         _format_option_block(
@@ -1323,17 +1313,39 @@ def write_configuration_file(
     )
 
     lines.append(_format_field_line("max_vars", config.max_vars))
-    lines.append(_format_field_line("n_seeds", config.n_seeds))
-    lines.append(_format_field_line("seed_size", config.seed_size))
-    lines.append(_format_field_line("random_state", config.random_state))
     lines.append(_format_field_line("signif_lvl", config.signif_lvl))
     lines.append(_format_field_line("corr_threshold", config.corr_threshold))
     lines.append(_format_field_line("vif_threshold", config.vif_threshold))
     lines.append(_format_field_line("tm_cutoff", config.tm_cutoff))
     lines.append(_format_field_line("export_limit", config.export_limit))
     lines.append(_format_field_line("n_jobs", config.n_jobs))
-
     lines.append("")
+    lines.append("# Seed settings for EPR-S")
+    lines.append(_format_field_line("n_seeds", config.n_seeds))
+    lines.append(_format_field_line("seed_size", config.seed_size))
+    lines.append(_format_field_line("random_state", config.random_state))
+    lines.append(
+        _format_field_line(
+            "allow_small_seed_count", _bool_to_activation_text(config.allow_small_seed_count)
+        )
+    )
+    lines.append("")
+    iterations_mode_options = _build_iterations_mode_options(config)
+    lines.extend(
+        _format_option_block(
+            key="iterations_mode",
+            options=iterations_mode_options,
+            selected_value=config.iterations_mode,
+        )
+    )
+    if config.iterations_mode == ITERATION_MODE_MANUAL:
+        lines.append(
+            _format_field_line(
+                "max_iterations_per_seed", getattr(config, "max_iterations_per_seed", "")
+            )
+        )
+        lines.append("")
+
     lines.append("# Prediction clipping")
     clip_enabled = config.clip_predictions is not None
     lines.append(_format_field_line("clip_enabled", _bool_to_text(clip_enabled)))
@@ -1509,9 +1521,11 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         return value_int
 
     max_vars = _parse_positive_int("max_vars")
+    allow_small_seed_count = _parse_bool(values.get("allow_small_seed_count", False))
+    seed_minimum = None if allow_small_seed_count else MIN_SEEDS
     n_seeds = _parse_positive_int(
         "n_seeds",
-        min_value=MIN_SEEDS,
+        min_value=seed_minimum,
         min_warning="Only values greater than 1000 are allowed.",
     )
     seed_size = _parse_positive_int("seed_size")
@@ -1589,6 +1603,7 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         n_seeds=n_seeds,
         seed_size=seed_size,
         random_state=random_state,
+        allow_small_seed_count=allow_small_seed_count,
         cov_type=cov_type,
         signif_lvl=signif_lvl,
         corr_threshold=corr_threshold,
@@ -1686,8 +1701,8 @@ def export_results_to_csv_cli(
 def run_cli(config_path: Union[str, Path]) -> None:
     _ensure_heavy_imports_loaded()
 
-    config, split_settings, output_path = parse_configuration_file(config_path)
     print(f"Loaded configuration from {config_path}")
+    config, split_settings, output_path = parse_configuration_file(config_path)
 
     context = load_dataset(
         config.data_path,
@@ -1702,17 +1717,32 @@ def run_cli(config_path: Union[str, Path]) -> None:
 
     total_combos = _compute_combination_total(len(context.cols), config.max_vars)
     threshold = _combination_efficiency_threshold(config.max_vars)
+    warnings: list[str] = []
     if config.method == "eprs" and total_combos <= threshold:
-        raise ValueError(
-            "Configuration not allowed: EPR-S is restricted for this configuration. "
-            "Please select the 'All subsets' method."
+        warnings.append(
+            "Warning: The current configuration is outside the recommended EPR-S "
+            "thresholds. The analysis will proceed, but it is recommended to use the "
+            "'All subsets' method for improved efficiency."
         )
     if config.method == "all_subsets" and total_combos > threshold:
-        print(
+        warnings.append(
             "Warning: This configuration may require substantial computation time. "
             "It is recommended to switch to the EPR-S method for better efficiency."
         )
+    if config.allow_small_seed_count and config.n_seeds < MIN_SEEDS:
+        warnings.append(
+            "Warning: The current run is using fewer than 1000 seeds; "
+            "method performance may be compromised."
+        )
+    if warnings:
+        print()
+        for index, warning in enumerate(warnings):
+            print(warning)
+            if index < len(warnings) - 1:
+                print()
+        print()
 
+    print("*" * 30)
     print(f"Dataset: {Path(config.data_path).name}")
     print(f"Predictors available: {len(context.cols)}")
     method_display = METHOD_KEY_TO_DISPLAY.get(config.method, config.method)
@@ -1726,7 +1756,10 @@ def run_cli(config_path: Union[str, Path]) -> None:
         print(f"Iterations per seed mode: {iteration_mode_desc}")
     elif (config.method or "").lower() == "all_subsets":
         print(f"Max predictors per model: {config.max_vars}")
+    print("*" * 30)
 
+    print("Analysis initiated with the user-provided configuration.")
+    print("Press Ctrl+C to cancel analysis.")
     print()
 
     last_stage = {"value": None}
@@ -4423,7 +4456,7 @@ class MLRXApp(tk.Tk):
         params_frame = ttk.LabelFrame(self.config_tab, text="Settings")
         params_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-        settings_row_padding = {"padx": padding["padx"], "pady": (4, 4)}
+        settings_row_padding = {"padx": padding["padx"], "pady": (5, 5)}
 
         defaults = EPRSConfig()
         self.constant_threshold_var.set(str(defaults.constant_threshold))
@@ -4471,6 +4504,8 @@ class MLRXApp(tk.Tk):
         self.random_state_mode = tk.StringVar(value="default")
         self.random_state_manual_var = tk.StringVar(value="")
         self.allow_small_seed_count = tk.BooleanVar(value=False)
+        # Internal override: set to False to allow seed settings with All subsets.
+        self._restrict_seed_settings_to_eprs = True
         self.seed_size_applied_var = tk.StringVar(value="")
         self.random_state_applied_var = tk.StringVar(value="")
         self.guardrail_applied_var = tk.StringVar(value="")
@@ -5542,6 +5577,7 @@ class MLRXApp(tk.Tk):
         self.guardrail_applied_var.set("")
         self._toggle_seed_settings_entries()
         self._sync_seed_settings_controls()
+        self._center_dialog(window)
 
     def _close_seed_settings_dialog(self) -> None:
         if self.seed_settings_dialog is None:
@@ -5566,7 +5602,7 @@ class MLRXApp(tk.Tk):
 
     def _sync_seed_settings_controls(self) -> None:
         method_key = METHOD_DISPLAY_TO_KEY.get(self.method_choice.get(), "all_subsets")
-        if method_key == "all_subsets":
+        if method_key == "all_subsets" and self._restrict_seed_settings_to_eprs:
             if getattr(self, "seed_size_entry", None) is not None:
                 self.seed_size_entry.configure(state="disabled")
             if getattr(self, "random_state_entry", None) is not None:
@@ -5640,6 +5676,13 @@ class MLRXApp(tk.Tk):
         seed_size = self._safe_int(self.params_vars["seed_size"].get())
         random_state = self._safe_int(self.params_vars["random_state"].get())
         default_seed = self._calculate_seed_size_default()
+
+        if self.seed_size_mode.get() == "default" and default_seed is not None:
+            if seed_size != default_seed:
+                self.params_vars["seed_size"].set(str(default_seed))
+                seed_size = default_seed
+            if self.seed_size_manual_var.get():
+                self.seed_size_manual_var.set("")
 
         parts: list[str] = []
         if seed_size is not None and default_seed is not None and seed_size != default_seed:
@@ -5874,8 +5917,11 @@ class MLRXApp(tk.Tk):
     def _on_method_change(self, *_args):
         display_value = self.method_choice.get()
         method_key = METHOD_DISPLAY_TO_KEY.get(display_value, "all_subsets")
-        seed_state = "disabled" if method_key == "all_subsets" else "normal"
-        button_state = "disabled" if method_key == "all_subsets" else "normal"
+        enforce_seed_restrictions = (
+            method_key == "all_subsets" and self._restrict_seed_settings_to_eprs
+        )
+        seed_state = "disabled" if enforce_seed_restrictions else "normal"
+        button_state = "disabled" if enforce_seed_restrictions else "normal"
 
         if self.seed_entry is not None and self.seed_entry.winfo_exists():
             self.seed_entry.configure(state=seed_state)
@@ -7720,6 +7766,44 @@ class MLRXApp(tk.Tk):
         y = parent_root_y + max(0, int((parent_height - dlg_height) / 2))
         dialog.geometry(f"+{x}+{y}")
 
+    def _show_configuration_warning(self, message: str) -> bool:
+        dialog = tk.Toplevel(self)
+        dialog.title("Configuration warning")
+        dialog.transient(self)
+        dialog.grab_set()
+
+        result = {"continue": False}
+
+        def _continue() -> None:
+            result["continue"] = True
+            dialog.destroy()
+
+        def _cancel() -> None:
+            dialog.destroy()
+
+        dialog.protocol("WM_DELETE_WINDOW", _cancel)
+
+        content = ttk.Frame(dialog, padding=10)
+        content.grid(sticky="nsew")
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+
+        message_label = ttk.Label(content, text=message, justify="left", wraplength=420)
+        message_label.grid(row=0, column=0, columnspan=2, sticky="w")
+
+        button_frame = ttk.Frame(content)
+        button_frame.grid(row=1, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        ttk.Button(button_frame, text="Cancel analysis", command=_cancel).grid(
+            row=0, column=0, padx=(0, 6)
+        )
+        ttk.Button(button_frame, text="Continue", command=_continue).grid(
+            row=0, column=1
+        )
+
+        self._center_dialog(dialog)
+        self.wait_window(dialog)
+        return result["continue"]
+
     def _prompt_output_destination(self) -> Optional[Path]:
         dialog = tk.Toplevel(self)
         dialog.title("Select results destination")
@@ -7845,17 +7929,20 @@ class MLRXApp(tk.Tk):
         total_combos = _compute_combination_total(len(context.cols), config.max_vars)
         threshold = _combination_efficiency_threshold(config.max_vars)
         if config.method == "eprs" and total_combos <= threshold:
-            messagebox.showerror(
-                "Configuration error",
-                "EPR-S is restricted for this configuration. Please select the 'All subsets' method.",
+            proceed = self._show_configuration_warning(
+                "The current configuration is outside the recommended EPR-S thresholds. "
+                "The analysis will proceed, but it is recommended to use the 'All subsets' "
+                "method for improved efficiency."
             )
-            return
+            if not proceed:
+                return
         if config.method == "all_subsets" and total_combos > threshold:
-            messagebox.showwarning(
-                "Configuration warning",
+            proceed = self._show_configuration_warning(
                 "This configuration may require substantial computation time. "
-                "It is recommended to switch to the EPR-S method for better efficiency.",
+                "It is recommended to switch to the EPR-S method for better efficiency."
             )
+            if not proceed:
+                return
 
         output_path = Path(destination)
         self.results_export_path = output_path
@@ -7891,6 +7978,7 @@ class MLRXApp(tk.Tk):
         header_text = self._format_run_header(config, context, split_settings)
         if header_text:
             self._append_log(header_text)
+        self._append_log("Analysis initiated with the user-provided configuration.\n")
         self._append_log("Starting analysis...\n")
         self.status_var.set(self._format_running_status(1))
         self.run_button.configure(state="disabled")
@@ -9239,6 +9327,7 @@ class MLRXApp(tk.Tk):
             )
             params["n_seeds"] = MIN_SEEDS
             self.params_vars["n_seeds"].set(str(MIN_SEEDS))
+        params["allow_small_seed_count"] = self.allow_small_seed_count.get()
 
         params["data_path"] = data_path
         params["delimiter"] = self._get_delimiter(self.delimiter_var.get())
@@ -9408,6 +9497,7 @@ class MLRXApp(tk.Tk):
         self.params_vars["tm_cutoff"].set(config.tm_cutoff)
         self.params_vars["export_limit"].set(config.export_limit)
         self.params_vars["n_jobs"].set(config.n_jobs)
+        self.allow_small_seed_count.set(bool(config.allow_small_seed_count))
         self._update_seed_settings_summary()
 
         normalized_cov = COVARIANCE_KEY_NORMALIZED.get(
