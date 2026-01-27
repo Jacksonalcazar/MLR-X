@@ -193,12 +193,22 @@ Selecting \emph{None} keeps external validation available later from the Validat
 
 \paragraph{Settings}
   \begin{enumerate}[label=\arabic*.]
-    \item Search method: \textbf{EPR-S} (Expand--Perturb--Reduce--Swap) or \textbf{All Subsets}. For further details see section 6.
-    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; recommendation buttons fill sensible defaults. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence).
+    \item Search method: \textbf{All Subsets} (default) or \textbf{EPR-S} (Expand--Perturb--Reduce--Swap). For further details see section 6.
+    \item EPR-S parameters: \emph{Number of seeds}, \emph{Seed size}, and \emph{Set iterations/seed}. Seeds are independent starting points for exploring model combinations; defaults are provided for a balanced start. A guardrail enforces a minimum of 1{,}000 seeds unless \emph{Allow fewer than 1000 seeds} is enabled. Iterations per seed can run in \textit{auto} (estimate and apply a maximum), \textit{manual} (enter a maximum), or \textit{converge} (run until convergence).
     \item Key parameters: \emph{Max predictors per model}, \emph{Significance level}, \emph{Correlation threshold}, \emph{VIF threshold}, \emph{Target metric cutoff}, \emph{Top models to report}, and \emph{CPU cores to use} (for further details, see Section~10.1). \emph{Top models to report} defines the maximum number of top-performing models that are exported and used in CSV files, diagnostic tables, visualizations, and summaries (default: 5000). Predictors correlation and Variance Inflation Factor (VIF) thresholds gate multicollinearity; the Target metric cutoff uses the training-set value of the selected objective as a gatekeeper even when optimizing alternative metrics.
     \item Target metric and covariance: select R$^2$, adj-R$^2$, Q$^2$ (LOO), or RMSE (LOO) as the scoring objective and pick the covariance estimator (Non-robust, HC0--HC3), for further details, see Section~10.1.
     \item \emph{Clip predictions to}: set lower and/or upper bounds to constrain predicted values for scoring and exports.
   \end{enumerate}
+\paragraph{Seed settings}
+The \emph{Seed settings} dialog consolidates EPR-S controls into three sections:
+\begin{itemize}
+  \item \textbf{Seed size}: choose the default size (kept synchronized at half the \emph{Max predictors per model}) or apply a custom size. A \emph{Changes applied!} label appears after updating.
+  \item \textbf{Reproducibility}: set \emph{Random state} (default 42) to make EPR-S seed generation reproducible. A \emph{Changes applied!} label confirms the update.
+  \item \textbf{Guardrail}: enable or disable the \emph{Allow fewer than 1000 seeds} checkbox. Disabling it keeps the minimum at 1{,}000 seeds; enabling it allows smaller runs with a confirmation. A \emph{Changes applied!} label confirms the update.
+\end{itemize}
+When non-default values are active, a gray summary appears next to the \emph{Seed settings} button (e.g., \emph{Seed size: 4} and/or \emph{Random state: 7}). The summary refreshes automatically when related parameters such as the maximum number of predictors change.
+If the configuration is outside recommended thresholds, the GUI opens a custom warning dialog offering \emph{Continue} or \emph{Cancel analysis} so you can explicitly proceed or abort.
+The dialog opens centered on the main window for easier review.
 
 \subsection{\textbf{Models} tab}
 Displays three synchronized tables corresponding to training, internal validation, and external validation results. The header controls allow loading a results file (\emph{Browse}, \emph{Load}, \emph{Clear}, \emph{Filter}), picking the sorting criterion, and filtering models by predictors.
@@ -299,16 +309,16 @@ Heuristic search that runs per seed using the target metric, predictor cap, corr
   \item Stop when no further gains are observed after repeated passes or when the iteration budget per seed is reached. Quality filters such as significance level and multicollinearity are applied, retaining only unique, eligible models sorted by $R^2$.
 \end{enumerate}
 \medskip
-EPR-S runs are fully deterministic: for a fixed dataset, configuration options, and seed list, the algorithm follows identical search paths and produces the same set of exported models. This property ensures full reproducibility of results and facilitates direct comparison across runs. EPR-S is an original search strategy developed for this software package (doi.org/xxxxx).
+EPR-S runs are fully deterministic: for a fixed dataset, configuration options, and random state, the algorithm follows identical search paths and produces the same set of exported models. This property ensures full reproducibility of results and facilitates direct comparison across runs. EPR-S is an original search strategy developed for this software package (doi.org/xxxxx).
 
 \subsection{All subsets (exhaustive)}
-Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small (practical below roughly 25 variables) because the number of combinations grows quickly.
+Enumerates every predictor combination up to \emph{Max predictors}, pre-filtering by the correlation threshold and applying VIF checks during evaluation. Progress tracking, cancellation, and the same export limits and reporting thresholds as EPR-S are enforced. Use this engine when the predictor space is small because the number of combinations grows quickly. Combination-count helpers estimate the scale of the search and display guidance or warnings when the requested space is inefficient; the GUI presents a warning dialog and the CLI emits structured warnings, letting you decide whether to proceed.
 
 % =========================================================
 
 \section{Summary and reports}
 \begin{itemize}
-  \item Summary tab: \emph{Export Summary...} writes the currently selected model dossier (including the chosen covariance setting) to a text file.
+  \item Summary tab: \emph{Export Summary...} writes a complete model dossier to a text file, including run metadata, search settings, coefficients, diagnostics, validation metrics, and the chosen covariance setting for the currently selected model.
   \item Diagnostics tab: \emph{Export CSV} saves the filtered observation diagnostics and the active correlation matrix (with or without the target) using semicolon-separated CSV.
   \item Visualization/plots: \emph{Save current plot} exports the visible chart to PNG, TIFF, PDF, or SVG with high-DPI output when needed.
 \end{itemize}
@@ -330,9 +340,9 @@ If additional arguments are supplied, the program shows the expected syntax and 
 Paths containing spaces must be quoted (for example, \texttt{./MLRX "path/with space/config.conf"}).
 
 \subsection{Configuration file structure}
-A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. Section~13 provides a complete, annotated example of a configuration file
+A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
 \subsection{Execution and progress}
-The CLI loads the configuration and reports the dataset name, available predictors, selected search method, and—when using EPR-S—the active seed list and iteration budget. It validates all parameter ranges, including manual iteration counts and split identifiers, and streams live progress updates during model search or evaluation, as well as during VIF computations. Upon completion, the CLI summarizes the total models explored, those meeting the target-metric threshold, the filtered set retained after export limits, and the corresponding CPU times.
+The CLI prints \texttt{Loaded configuration from ...} before parsing so any parse-time warnings follow it. It then reports the dataset name, available predictors, selected search method, and—when using EPR-S—the active seed list, seed size, random state, and iteration budget. It validates parameter ranges, including manual iteration counts, split identifiers, and efficiency thresholds for the chosen search strategy. Inefficient or out-of-threshold configurations are reported as structured warnings (rather than hard errors), and runs continue with a \texttt{Press Ctrl+C to cancel analysis.} hint. A banner of asterisks frames the configuration summary, and if fewer than 1{,}000 seeds are used with the guardrail enabled, the CLI prints a low-seed warning noting potential performance impact. Live progress updates stream during model search or evaluation, as well as during VIF computations. Upon completion, the CLI summarizes the total models explored, those meeting the target-metric threshold, the filtered set retained after export limits, and the corresponding CPU times.
 
 \subsection{Output}
 Results are exported to the specified CSV file using semicolon separation, with normalized variable names and training, internal, and external metrics. If no model satisfies the target metric cutoff, an empty CSV file is written. Any parsing or runtime errors are printed. The output path can be changed in the configuration file; by default, the CLI writes \texttt{models.csv} to the current working directory.
@@ -341,9 +351,9 @@ Results are exported to the specified CSV file using semicolon separation, with 
 \section{Operational good practices}
 \begin{itemize}
   \item Validate inputs before running: preview the CSV to confirm the delimiter, target column, non-variable columns, and exclusions. Apply the constant filter when near-constant predictors should be removed. If planning an external holdout, ensure identical headers, column order, and target definition across all files.
-  \item Choose the search strategy by scope: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. In practice, EPR-S is preferred for large or high-dimensional designs, while All Subsets should be reserved for small datasets or confirmatory analyses.
-  \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors; use the \emph{Recommended} button for automatic calculation. Increase this value if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility.
-  \item Leverage recommended defaults, then refine: allow the app to prefill EPR-S values using the recommendation buttons, then adjust the \emph{Target metric cutoff} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
+  \item Choose the search strategy by scope: use EPR-S for efficient exploration of large predictor spaces guided by deterministic seeded starts, and All Subsets when exhaustive coverage is required and longer runtimes are acceptable. In practice, EPR-S is preferred for large or high-dimensional designs, while All Subsets should be reserved for small datasets or confirmatory analyses; heed the combination-count guidance that flags inefficient All Subsets configurations.
+  \item Configure EPR-S parameters thoughtfully: set the \emph{Number of Seeds} to at least the number of predictors and adjust upward if premature convergence is observed—values above $\sim$1{,}000 seeds are recommended for robust searches. Choose a \emph{Seed size} close to half of the maximum number of predictors to balance exploration depth and computational feasibility, and set a \emph{Random state} whenever reproducibility matters.
+  \item Leverage defaults, then refine: start from the default EPR-S values and adjust the \emph{Target metric cutoff} and the \emph{Export limit} (default 5,000) to control how many candidate models are retained and written to disk.
   \item Tune statistical thresholds before execution: define the \emph{Significance level} to control predictor inclusion. Set the \emph{Correlation threshold} (0.9 by default) and \emph{Variance Inflation Factor (VIF) threshold}—preferably VIF $<$ 5—to mitigate multicollinearity. Revisit these thresholds if the filtering is too permissive or overly restrictive.
   \item Align parallelization with available hardware: set \emph{CPU cores to use} according to available CPU capacity.
   \item Validate comprehensively and interpret jointly: always run internal validation (LOO or k-fold) and, when available, external validation. Review the \emph{Validation}, \emph{Diagnostics}, \emph{Visualization}, and \emph{Summary} tabs together to assess model stability and reliability. Enable the recommended covariance option in the Summary tab when statistical inference is required.
@@ -356,8 +366,10 @@ Results are exported to the specified CSV file using semicolon separation, with 
 
 \subsection{Key configuration parameters}
 \begin{itemize}
-  \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models.
+  \item \textbf{Number of Seeds}: controls how many stochastic starting points EPR-S explores; higher counts broaden coverage and reduce convergence to suboptimal models. A guardrail enforces a 1{,}000-seed minimum unless \emph{Allow fewer than 1000 seeds} is enabled.
   \item \textbf{Seed size}: sets the initial predictor count per seed; values near half the predictor limit balance exploration and computation.
+  \item \textbf{Random state (reproducibility)}: seed for the EPR-S random number generator (default 42), used to build the seed list reproducibly across GUI, CLI, and configuration reloads.
+  \item \textbf{Allow fewer than 1000 seeds}: configuration guardrail (\texttt{allow\_small\_seed\_count}) that permits EPR-S runs below 1{,}000 seeds while issuing warnings about potential performance impact.
   \item \textbf{Set iterations/seed}: caps or adapts the exploration depth per seed through \emph{auto}, \emph{manual}, or \emph{converge} modes.
   \item \textbf{Max predictors per model}: maximum number of predictors permitted in any candidate model.
   \item \textbf{Significance level}: p-value threshold used for retaining regression coefficients during the model-refinement step.
@@ -616,25 +628,18 @@ Excluded observation IDs = none
 Data splitting
 --------------
 # Split mode options:
-1) No split (use full dataset)
-2) Random split
-3) Manual split
-4) External validation dataset
+1) None (use full dataset)
+2) Random
+3) Manual
 Selected option: 1
 
 ---------
 Settings
 ---------
 # Search method options:
-1) EPR-S
-2) All subsets (traditional)
-Selected option: 1
-
-# Iterations per seed mode options:
-1) auto
-2) manual (Max iterations per seed = none)
-3) Until converge
-Selected option: 1
+1) All subsets (traditional)
+2) EPR-S
+Selected option: 2
 
 # Target metric options:
 1) R2
@@ -644,7 +649,7 @@ Selected option: 1
 Selected option: 1
 
 # Covariance type options:
-1) Nonrobust
+1) Non robust
 2) HC0
 3) HC1
 4) HC2
@@ -652,14 +657,24 @@ Selected option: 1
 Selected option: 1
 
 Max predictors per model = 6
-Number of seeds = 1000
-Seed size = 3
 Significance level = 0.05
 Correlation threshold = 0.9
 VIF threshold = 4.0
 Target metric cutoff = 0.8
 Top models to export = 5000
 CPU cores to use = 4
+
+# Seed settings for EPR-S
+Number of seeds = 1000
+Seed size = 3
+Random state = 42
+Allow fewer than 1000 seeds = deactivated
+
+# Iterations per seed mode options:
+1) auto
+2) manual (Max iterations per seed = none)
+3) Until converge
+Selected option: 1
 
 # Prediction clipping
 Clip predictions = false
