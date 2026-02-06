@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import argparse
 import csv
 import importlib
 import io
@@ -13,6 +14,7 @@ import random
 import re
 import sys
 import textwrap
+import tempfile
 import threading
 import time
 import warnings
@@ -69,6 +71,7 @@ _HEAVY_IMPORTS: dict[str, dict[str, Any]] = {
     "matplotlib.collections": {"attrs": {"PathCollection": "PathCollection"}},
     "matplotlib.patches": {"attrs": {"Rectangle": "MplRectangle"}},
     "matplotlib.figure": {"attrs": {"Figure": "Figure"}},
+    "matplotlib.pyplot": {"alias": "plt"},
     "matplotlib.ticker": {
         "attrs": {"FixedLocator": "FixedLocator", "FormatStrFormatter": "FormatStrFormatter"}
     },
@@ -173,7 +176,7 @@ MIN_SEEDS = 1000
 def _default_parallel_jobs() -> int:
     return max(1, os.cpu_count() or 1)
 MLRX_HOMEPAGE_URL = "https://jacksonalcazar.github.io/MLR-X"
-MANUAL_URL = "https://mega.nz/file/aJ9S0awL#i1BiWQaiTTtV0Luo44mdn4BFntyKktDEQ01FyL7TnCE"
+MANUAL_URL = "https://mega.nz/file/SZNDHbKQ#ISZaujnuZ3Lsp27smx6GZI0S1jjLAhOiI2xeu_qHlWM"
 BUG_REPORT_URL = "https://github.com/Jacksonalcazar/MLR-X/issues"
 PAYPAL_DONATION_URL = "https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG"
 
@@ -468,6 +471,12 @@ class EPRSConfig:
     export_limit: int = DEFAULT_EXPORT_LIMIT
     target_metric: str = "R2"
     method: str = "all_subsets"
+    validation_enabled: bool = True
+    validation_loo: bool = True
+    validation_kfold_enabled: bool = False
+    validation_kfold_folds: int = 10
+    validation_kfold_repeats: int = 5
+    validation_external_path: str = ""
 
     def __post_init__(self) -> None:
         self.n_jobs = _coerce_parallel_jobs(self.n_jobs)
@@ -724,8 +733,8 @@ def apply_axis_to_plot(ax: Axes, axis: str, params: AxisParameters) -> None:
 
 
 METHOD_INFO_TEXT = {
-    "EPR-S": "Up to 1000 predictors or more.",
-    "All subsets (traditional)": "Feasible only for small combinatorial spaces.",
+    "EPR-S": "Up to 1000 variables or more.",
+    "All subsets (traditional)": "For fewer than 25 variables.",
 }
 
 METADATA_PREFIX = "#Metadata:"
@@ -899,7 +908,7 @@ def _bool_to_text(value: bool) -> str:
 
 
 def _bool_to_activation_text(value: bool) -> str:
-    return "activated" if value else "deactivated"
+    return "true" if value else "false"
 
 
 def _parse_bool(value: object, *, default: bool = False) -> bool:
@@ -915,6 +924,13 @@ def _parse_bool(value: object, *, default: bool = False) -> bool:
     if text in {"false", "0", "no", "off", "deactivated"}:
         return False
     return default
+
+
+def _strip_inline_comment(value: object) -> str:
+    text = str(value) if value is not None else ""
+    return text.split("#", 1)[0].strip()
+
+
 
 
 def _option_index(options: list[tuple[str, str]], selected_value: str) -> int:
@@ -966,6 +982,12 @@ CONFIG_FIELD_LABELS: dict[str, str] = {
     "manual_train_ids": "Manual split training IDs",
     "manual_test_ids": "Manual split testing IDs",
     "external_path": "External split path",
+    "validation_enabled": "Validation",
+    "validation_loo": "LOO",
+    "validation_kfold_enabled": "k-fold",
+    "validation_kfold_folds": "Folds",
+    "validation_kfold_repeats": "Repeats",
+    "validation_external_path": "External dataset path",
     "output_path": "Output path",
 }
 
@@ -1016,7 +1038,7 @@ def _format_option_block(
     for idx, (_value, label) in enumerate(options, start=1):
         lines.append(f"{idx}) {label}")
     selected_index = _option_index(options, selected_value)
-    lines.append(f"Selected option: {selected_index}")
+    lines.append(f"Selected option = {selected_index}")
     lines.append("")
     return lines
 
@@ -1102,6 +1124,27 @@ def _resolve_iterations_metadata_value(
     return formatter(resolved_value)
 
 
+def _build_validation_metadata_from_config(config: EPRSConfig) -> dict[str, object]:
+    kfold_enabled = bool(getattr(config, "validation_kfold_enabled", False))
+    folds = getattr(config, "validation_kfold_folds", None)
+    repeats = getattr(config, "validation_kfold_repeats", None)
+    if not kfold_enabled:
+        folds = None
+        repeats = None
+
+    external_path = (getattr(config, "validation_external_path", "") or "").strip()
+    if not external_path:
+        external_path = "none"
+
+    return {
+        "enabled": bool(getattr(config, "validation_enabled", False)),
+        "loo": bool(getattr(config, "validation_loo", True)),
+        "kfold": {"enabled": kfold_enabled, "folds": folds, "repeats": repeats},
+        "external_path": external_path,
+        "selection": "all",
+    }
+
+
 def _build_cli_metadata(
     config: EPRSConfig,
     split_settings: Optional[dict],
@@ -1114,6 +1157,7 @@ def _build_cli_metadata(
 ) -> dict:
     delimiter_value = MLRXApp._normalize_delimiter_value(config.delimiter)
     excluded_obs = (getattr(config, "excluded_observations", "") or "").strip() or "none"
+    validation_meta = _build_validation_metadata_from_config(config)
     metadata: dict[str, object] = {
         "version": METADATA_VERSION,
         "dataset_path": config.data_path,
@@ -1152,7 +1196,14 @@ def _build_cli_metadata(
     else:
         metadata["clip"] = {"enabled": False}
 
-    metadata["kfold"] = {"enabled": False, "folds": None, "repeats": None}
+    metadata["validation"] = validation_meta
+    metadata["validation_enabled"] = bool(validation_meta.get("enabled", False))
+    metadata["validation_loo"] = bool(validation_meta.get("loo", False))
+    kfold_meta = validation_meta.get("kfold", {}) if isinstance(validation_meta, dict) else {}
+    metadata["validation_kfold_enabled"] = bool(kfold_meta.get("enabled", False))
+    metadata["validation_kfold_folds"] = kfold_meta.get("folds")
+    metadata["validation_kfold_repeats"] = kfold_meta.get("repeats")
+    metadata["validation_external_path"] = validation_meta.get("external_path", "none")
 
     def _store_cpu_time(key_prefix: str, value: Optional[float]) -> None:
         if value is None:
@@ -1326,7 +1377,7 @@ def write_configuration_file(
     lines.append(_format_field_line("random_state", config.random_state))
     lines.append(
         _format_field_line(
-            "allow_small_seed_count", _bool_to_activation_text(config.allow_small_seed_count)
+            "allow_small_seed_count", _bool_to_text(config.allow_small_seed_count)
         )
     )
     lines.append("")
@@ -1357,6 +1408,24 @@ def write_configuration_file(
         lines.append(_format_field_line("clip_low", ""))
         lines.append(_format_field_line("clip_high", ""))
 
+    lines.append("")
+    lines.append("# Internal and external validation:")
+    lines.append(_format_field_line("validation_enabled", _bool_to_text(config.validation_enabled)))
+    lines.append(_format_field_line("validation_loo", _bool_to_text(config.validation_loo)))
+    lines.append(
+        _format_field_line(
+            "validation_kfold_enabled", _bool_to_text(config.validation_kfold_enabled)
+        )
+    )
+    lines.append(
+        _format_field_line("validation_kfold_folds", config.validation_kfold_folds)
+    )
+    lines.append(
+        _format_field_line("validation_kfold_repeats", config.validation_kfold_repeats)
+    )
+    lines.append(
+        _format_field_line("validation_external_path", config.validation_external_path)
+    )
     lines.append("")
     lines.append("-------")
     lines.append("Output")
@@ -1403,7 +1472,7 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
 
             if current_option_key:
                 selection_match = re.match(
-                    r"selected option\s*:\s*(.*)", line, flags=re.IGNORECASE
+                    r"selected option\s*[:=]\s*(.*)", line, flags=re.IGNORECASE
                 )
                 if selection_match:
                     raw_value = selection_match.group(1)
@@ -1467,6 +1536,31 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         excluded_observations = ""
     else:
         excluded_observations = excluded_observations_raw
+
+    validation_enabled = _parse_bool(
+        _strip_inline_comment(values.get("validation_enabled", "")), default=True
+    )
+    validation_loo = _parse_bool(
+        _strip_inline_comment(values.get("validation_loo", "")), default=True
+    )
+    kfold_enabled = _parse_bool(
+        _strip_inline_comment(values.get("validation_kfold_enabled", "")), default=True
+    )
+    kfold_folds = None
+    kfold_repeats = None
+    folds_text = _strip_inline_comment(values.get("validation_kfold_folds", ""))
+    repeats_text = _strip_inline_comment(values.get("validation_kfold_repeats", ""))
+    if folds_text:
+        kfold_folds = int(float(folds_text))
+    if repeats_text:
+        kfold_repeats = int(float(repeats_text))
+    validation_external_raw = _strip_inline_comment(
+        values.get("validation_external_path", "")
+    )
+    if validation_external_raw.lower() == "none":
+        validation_external_path = ""
+    else:
+        validation_external_path = validation_external_raw
 
     method = values.get("method", "all_subsets")
     if method not in {value for value, _label in CONFIG_LIST_OPTIONS["method"]}:
@@ -1616,9 +1710,82 @@ def parse_configuration_file(path: Union[str, Path]) -> tuple[EPRSConfig, dict, 
         method=method,
         iterations_mode=iterations_mode,
         max_iterations_per_seed=manual_iterations,
+        validation_enabled=validation_enabled,
+        validation_loo=validation_loo,
+        validation_kfold_enabled=kfold_enabled,
+        validation_kfold_folds=kfold_folds or EPRSConfig().validation_kfold_folds,
+        validation_kfold_repeats=kfold_repeats or EPRSConfig().validation_kfold_repeats,
+        validation_external_path=validation_external_path,
     )
 
     return config, split_settings, output_path
+
+
+def _apply_validation_to_export_df(
+    export_df: pd.DataFrame,
+    context: EPRSContext,
+    config: EPRSConfig,
+) -> pd.DataFrame:
+    if export_df is None or export_df.empty:
+        return export_df
+
+    if not config.validation_enabled:
+        return export_df
+
+    use_loo = bool(config.validation_loo)
+    use_kfold = bool(config.validation_kfold_enabled)
+    folds = config.validation_kfold_folds if use_kfold else None
+    repeats = config.validation_kfold_repeats if use_kfold else None
+
+    external_path = (config.validation_external_path or "").strip()
+    if external_path.lower() == "none":
+        external_path = ""
+    ext_df = None
+    if external_path:
+        try:
+            ext_df = pd.read_csv(external_path, delimiter=config.delimiter)
+            ext_df.columns = [
+                col.strip() if isinstance(col, str) else col for col in ext_df.columns
+            ]
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: Unable to read external validation dataset: {exc}")
+
+    for idx, row in export_df.iterrows():
+        variables = MLRXApp._normalize_variables(row.get("Variables"))
+        if not variables:
+            continue
+
+        if use_loo:
+            try:
+                metrics = _evaluate_model_loo(context, variables, config.clip_predictions)
+                for key, value in metrics.items():
+                    export_df.at[idx, key] = value
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: LOO validation failed for model {row.get('Model')}: {exc}")
+
+        if use_kfold and folds is not None and repeats is not None:
+            try:
+                metrics = _evaluate_model_kfold(
+                    context,
+                    variables,
+                    folds,
+                    repeats,
+                    config.clip_predictions,
+                )
+                for key, value in metrics.items():
+                    export_df.at[idx, key] = value
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: k-fold validation failed for model {row.get('Model')}: {exc}")
+
+        if ext_df is not None:
+            try:
+                metrics = _compute_external_metrics(context, config, variables, ext_df)
+                for key, value in metrics.items():
+                    export_df.at[idx, key] = value
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: external validation failed for model {row.get('Model')}: {exc}")
+
+    return export_df
 
 
 def export_results_to_csv_cli(
@@ -1627,6 +1794,7 @@ def export_results_to_csv_cli(
     split_settings: Optional[dict],
     output_path: Union[str, Path],
     *,
+    context: Optional[EPRSContext] = None,
     cpu_search_minutes: Optional[float] = None,
     cpu_total_minutes: Optional[float] = None,
     models_found: Optional[int] = None,
@@ -1644,6 +1812,9 @@ def export_results_to_csv_cli(
         var_lists = export_df["Variables"].apply(MLRXApp._normalize_variables)
     else:
         var_lists = pd.Series([[] for _ in range(len(export_df))], index=export_df.index)
+
+    if context is not None:
+        export_df = _apply_validation_to_export_df(export_df, context, config)
 
     export_df["N_pred"] = var_lists.apply(len)
     export_df["Predictors"] = var_lists.apply(
@@ -1698,7 +1869,907 @@ def export_results_to_csv_cli(
     return export_path
 
 
-def run_cli(config_path: Union[str, Path]) -> None:
+@dataclass(frozen=True)
+class CLIOutputSpec:
+    diagnostics: bool = False
+    visualization: bool = False
+    summary: bool = False
+    summary_recommended_covariance: bool = False
+    visualization_formats: tuple[str, ...] = ()
+
+
+def _parse_cli_outputs(values: Optional[Sequence[str]]) -> CLIOutputSpec:
+    if not values:
+        return CLIOutputSpec()
+
+    diagnostics = False
+    visualization = False
+    summary = False
+    summary_rc = False
+    formats: list[str] = []
+
+    idx = 0
+    tokens = [str(value).strip().lower() for value in values if str(value).strip()]
+    while idx < len(tokens):
+        token = tokens[idx]
+        if token == "diagnostics":
+            diagnostics = True
+        elif token == "visualization":
+            visualization = True
+        elif token == "summary":
+            summary = True
+            if idx + 1 < len(tokens) and tokens[idx + 1] == "rc":
+                summary_rc = True
+                idx += 1
+        elif token in {"pdf", "png", "tiff", "svg"}:
+            formats.append(token)
+        elif token == "rc":
+            raise ValueError("The 'rc' flag must follow 'summary'.")
+        else:
+            raise ValueError(f"Unknown output option: {token}")
+        idx += 1
+
+    formats = list(dict.fromkeys(formats))
+    return CLIOutputSpec(
+        diagnostics=diagnostics,
+        visualization=visualization,
+        summary=summary,
+        summary_recommended_covariance=summary_rc,
+        visualization_formats=tuple(formats),
+    )
+
+
+def _read_results_file_cli(
+    path: Path,
+) -> tuple[pd.DataFrame, list[dict], list[dict], dict]:
+    if not path.exists():
+        raise FileNotFoundError(f"Results file not found: {path}")
+
+    metadata: dict = {}
+    data_lines: list[str] = []
+
+    inline_metadata_detected = False
+    inline_delimiter: Optional[str] = None
+    inline_column_count: Optional[int] = None
+    inline_metadata_fields: int = 0
+
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.startswith(METADATA_PREFIX):
+                candidate = _deserialize_metadata(line)
+                if candidate:
+                    metadata = candidate
+                continue
+
+            if not data_lines and not line.strip():
+                continue
+
+            if not data_lines:
+                header_line = line.rstrip("\n\r")
+                candidates = list(DELIMITER_NAME_TO_VALUE.values())
+                if ";" not in candidates:
+                    candidates.append(";")
+                for delimiter in candidates:
+                    header_values = _split_csv_line(header_line, delimiter)
+                    metadata_candidate = _deserialize_metadata(header_values[-1])
+                    if metadata_candidate:
+                        inline_metadata_detected = True
+                        inline_delimiter = delimiter
+                        inline_column_count = len(header_values) - 1
+                        inline_metadata_fields = 1
+                        metadata = metadata_candidate
+                        sanitized_header = _join_csv_line(header_values[:-1], delimiter)
+                        line = sanitized_header + "\n"
+                        break
+
+                    metadata_candidate = (
+                        _deserialize_metadata(header_values[-2])
+                        if len(header_values) >= 2
+                        else {}
+                    )
+                    if metadata_candidate and header_values[-1].strip() == "#":
+                        inline_metadata_detected = True
+                        inline_delimiter = delimiter
+                        inline_column_count = len(header_values) - 2
+                        inline_metadata_fields = 2
+                        metadata = metadata_candidate
+                        sanitized_header = _join_csv_line(header_values[:-2], delimiter)
+                        line = sanitized_header + "\n"
+                        break
+
+                    metadata_label_lower = METADATA_HEADER_LABEL.strip().lower()
+                    if (
+                        len(header_values) >= 2
+                        and header_values[-2].strip().lower() == metadata_label_lower
+                    ):
+                        inline_metadata_detected = True
+                        inline_delimiter = delimiter
+                        inline_column_count = len(header_values) - 2
+                        inline_metadata_fields = 2
+                        metadata_candidate = _deserialize_metadata(header_values[-1])
+                        if metadata_candidate:
+                            metadata = metadata_candidate
+                        sanitized_header = _join_csv_line(header_values[:-2], delimiter)
+                        line = sanitized_header + "\n"
+                        break
+
+            if inline_metadata_detected and inline_delimiter:
+                raw_line = line.rstrip("\n\r")
+                if raw_line:
+                    row_values = _split_csv_line(raw_line, inline_delimiter)
+                    if inline_metadata_fields == 0:
+                        sanitized_row = raw_line
+                    elif inline_column_count is None or len(row_values) >= inline_column_count + inline_metadata_fields:
+                        sanitized_row = _join_csv_line(
+                            row_values[:-inline_metadata_fields], inline_delimiter
+                        )
+                        line = sanitized_row + "\n"
+
+            data_lines.append(line)
+
+    if not data_lines:
+        raise ValueError("The selected file does not contain any rows.")
+
+    buffer = io.StringIO("".join(data_lines))
+    try:
+        df = pd.read_csv(buffer, sep=";")
+    except Exception:  # noqa: BLE001
+        buffer.seek(0)
+        df = pd.read_csv(buffer)
+
+    df = df.copy()
+    if "Predictors" in df.columns and "Variables" not in df.columns:
+        df = df.rename(columns={"Predictors": "Variables"})
+    if "N_pred" in df.columns and "N_var" not in df.columns:
+        df = df.rename(columns={"N_pred": "N_var"})
+    metadata_column: Optional[str] = None
+    for column in df.columns:
+        if not isinstance(column, str):
+            continue
+        if column.strip().lower() in LEGACY_METADATA_COLUMNS:
+            metadata_column = column
+            break
+
+    if metadata_column is not None:
+        series = df[metadata_column]
+        for value in series:
+            candidate = _deserialize_metadata(value)
+            if candidate:
+                metadata = candidate
+                break
+        df = df.drop(columns=[metadata_column])
+
+    if "Section" in df.columns:
+        sections = df["Section"].astype(str).str.strip().str.lower()
+    else:
+        sections = None
+
+    if sections is not None:
+        training_raw = df.loc[sections == "training"].copy()
+        internal_source = df.loc[sections == "internal"].copy()
+        external_source = df.loc[sections == "external"].copy()
+    else:
+        training_raw = df.copy()
+        internal_source = df.copy()
+        external_source = df.copy()
+
+    required_columns = {"Model", "Variables", "R2"}
+    missing_columns = [col for col in required_columns if col not in training_raw.columns]
+    if missing_columns:
+        missing_text = ", ".join(missing_columns)
+        raise ValueError(f"Training results are missing required columns: {missing_text}.")
+
+    training_rows: list[dict] = []
+    for _, row in training_raw.iterrows():
+        model_value = MLRXApp._safe_int(row.get("Model"))
+        variables = MLRXApp._normalize_variables(row.get("Variables"))
+        if model_value is None:
+            raise ValueError("Training results are missing model identifiers.")
+        entry: dict[str, object] = {
+            "Model": model_value,
+            "Variables": variables,
+            "N_var": len(variables),
+            "R2": MLRXApp._safe_float(row.get("R2")),
+            "R2_adj": MLRXApp._safe_float(row.get("R2_adj")),
+            "RMSE": MLRXApp._safe_float(row.get("RMSE")),
+            "s": MLRXApp._safe_float(row.get("s")),
+            "MAE": MLRXApp._safe_float(row.get("MAE")),
+            "VIF_max": MLRXApp._safe_float(row.get("VIF_max")),
+            "VIF_avg": MLRXApp._safe_float(row.get("VIF_avg")),
+        }
+        training_rows.append(entry)
+
+    training_df = pd.DataFrame(training_rows)
+    valid_models: set[int] = set()
+    if not training_df.empty and "Model" in training_df.columns:
+        valid_models = {
+            model
+            for model in (
+                MLRXApp._safe_int(value) for value in training_df["Model"].tolist()
+            )
+            if model is not None
+        }
+
+    internal_rows: list[dict] = []
+    for _, row in internal_source.iterrows():
+        model_value = MLRXApp._safe_int(row.get("Model"))
+        if model_value is None or (valid_models and model_value not in valid_models):
+            continue
+        metrics = {
+            "R2_loo": MLRXApp._safe_float(row.get("R2_loo")),
+            "RMSE_loo": MLRXApp._safe_float(row.get("RMSE_loo")),
+            "s_loo": MLRXApp._safe_float(row.get("s_loo")),
+            "MAE_loo": MLRXApp._safe_float(row.get("MAE_loo")),
+            "R2_kfold": MLRXApp._safe_float(row.get("R2_kfold")),
+            "RMSE_kfold": MLRXApp._safe_float(row.get("RMSE_kfold")),
+            "s_kfold": MLRXApp._safe_float(row.get("s_kfold")),
+            "MAE_kfold": MLRXApp._safe_float(row.get("MAE_kfold")),
+        }
+        if all(value is None for value in metrics.values()):
+            continue
+        variables = MLRXApp._normalize_variables(row.get("Variables"))
+        internal_rows.append(
+            {
+                "Model": model_value,
+                "Variables": variables,
+                "N_var": len(variables),
+                **metrics,
+            }
+        )
+
+    external_rows: list[dict] = []
+    for _, row in external_source.iterrows():
+        model_value = MLRXApp._safe_int(row.get("Model"))
+        if model_value is None or (valid_models and model_value not in valid_models):
+            continue
+        metrics = {
+            "Q2F1_ext": MLRXApp._safe_float(row.get("Q2F1_ext")),
+            "Q2F2_ext": MLRXApp._safe_float(row.get("Q2F2_ext")),
+            "Q2F3_ext": MLRXApp._safe_float(row.get("Q2F3_ext")),
+            "RMSE_ext": MLRXApp._safe_float(row.get("RMSE_ext")),
+            "s_ext": MLRXApp._safe_float(row.get("s_ext")),
+            "MAE_ext": MLRXApp._safe_float(row.get("MAE_ext")),
+        }
+        if all(value is None for value in metrics.values()):
+            continue
+        variables = MLRXApp._normalize_variables(row.get("Variables"))
+        external_rows.append(
+            {
+                "Model": model_value,
+                "Variables": variables,
+                "N_var": len(variables),
+                **metrics,
+            }
+        )
+
+    return training_df, internal_rows, external_rows, metadata
+
+
+def _export_diagnostics_cli(
+    diagnostics_df: pd.DataFrame,
+    context: EPRSContext,
+    variables: list[str],
+    output_dir: Path,
+    model_id: int,
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    diag_path = output_dir / f"model_{model_id}_diagnostics.csv"
+    diagnostics_df.to_csv(diag_path, sep=";", index=False, float_format="%.4f")
+
+    corr_df = _compute_correlation_matrix_cli(context, variables, include_target=False)
+    if corr_df is not None and not corr_df.empty:
+        export_df = corr_df.copy()
+        mask = np.tril(np.ones(export_df.shape, dtype=bool))
+        export_df = export_df.where(mask)
+        export_df.insert(0, "Variable", export_df.index.astype(str))
+        export_df.to_csv(
+            output_dir / f"model_{model_id}_correlation.csv",
+            sep=";",
+            index=False,
+            na_rep="",
+            float_format="%.4f",
+        )
+
+    corr_with_target = _compute_correlation_matrix_cli(context, variables, include_target=True)
+    if corr_with_target is not None and not corr_with_target.empty:
+        export_df = corr_with_target.copy()
+        mask = np.tril(np.ones(export_df.shape, dtype=bool))
+        export_df = export_df.where(mask)
+        export_df.insert(0, "Variable", export_df.index.astype(str))
+        export_df.to_csv(
+            output_dir / f"model_{model_id}_correlation_wdv.csv",
+            sep=";",
+            index=False,
+            na_rep="",
+            float_format="%.4f",
+        )
+
+
+def _compute_correlation_matrix_cli(
+    context: EPRSContext,
+    variables: list[str],
+    *,
+    include_target: bool = False,
+    dataset: str = "training",
+) -> Optional[pd.DataFrame]:
+    if not variables:
+        return None
+    if dataset == "testing":
+        source_df = context.test_df if context.test_df is not None else context.external_df
+    elif dataset == "both":
+        train_df = context.train_df
+        test_df = context.test_df if context.test_df is not None else context.external_df
+        if train_df is not None and test_df is not None:
+            source_df = pd.concat([train_df, test_df], ignore_index=True)
+        else:
+            source_df = train_df or test_df
+    else:
+        source_df = context.train_df
+    if source_df is None or source_df.empty:
+        return None
+    target_col = context.target_column
+    columns = list(dict.fromkeys([*variables, target_col])) if include_target else list(variables)
+    try:
+        subset = source_df.loc[:, columns]
+    except KeyError:
+        return None
+    if subset.empty:
+        return None
+    try:
+        corr = subset.astype(float, copy=False).corr()
+    except Exception:  # noqa: BLE001
+        return None
+    if corr.empty:
+        return None
+    corr = corr.reindex(index=columns, columns=columns)
+    return corr
+
+
+def _load_external_validation_dataset_cli(
+    context: EPRSContext,
+    config: EPRSConfig,
+) -> None:
+    external_path = (config.validation_external_path or "").strip()
+    if not external_path or external_path.lower() == "none":
+        context.external_df = None
+        return
+    try:
+        ext_df = pd.read_csv(external_path, delimiter=config.delimiter)
+        ext_df.columns = [
+            col.strip() if isinstance(col, str) else col for col in ext_df.columns
+        ]
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: Unable to read external validation dataset: {exc}")
+        context.external_df = None
+        return
+
+    target_col = context.target_column
+    if target_col not in ext_df.columns or ext_df.empty:
+        print(
+            "Warning: External validation dataset must include the dependent column "
+            "and at least one row."
+        )
+        context.external_df = None
+        return
+
+    context.external_df = ext_df.reset_index(drop=True)
+    context.external_X_np = None
+    context.external_y_np = None
+
+
+def _build_summary_text_cli(
+    context: EPRSContext,
+    config: EPRSConfig,
+    model_id: int,
+    variables: list[str],
+    training_row: dict,
+    internal_rows: list[dict],
+    external_rows: list[dict],
+    *,
+    use_recommended_covariance: bool,
+) -> str:
+    Xm = take(context, variables) if variables else np.empty((len(context.y_np), 0))
+    exog = np.c_[np.ones((Xm.shape[0], 1), dtype=Xm.dtype), Xm]
+    base_result = sm.OLS(context.y_np, exog).fit()
+    covariance_note = "Configured covariance"
+    if use_recommended_covariance:
+        diagnosis = _recommend_covariance_type(base_result)
+        cov_type = diagnosis.get("cov_type") or "nonrobust"
+        cov_kwds = diagnosis.get("cov_kwds") or {}
+        if not isinstance(cov_kwds, dict):
+            cov_kwds = {}
+        if cov_type == "nonrobust":
+            result = base_result
+        else:
+            try:
+                result = base_result.get_robustcov_results(cov_type=cov_type, **cov_kwds)
+            except Exception:  # noqa: BLE001
+                result = base_result
+                cov_type = "nonrobust"
+        covariance_note = f"Recommended covariance ({cov_type})"
+    else:
+        result = _apply_covariance_type(base_result, config, context, exog)
+
+    summary_lines = [
+        f"Model {model_id} summary",
+        f"Predictors: {', '.join(variables) if variables else '-'}",
+        f"Covariance: {covariance_note}",
+        "",
+        result.summary().as_text(),
+        "",
+        "Training metrics:",
+    ]
+    for key in ("R2", "R2_adj", "RMSE", "s", "MAE", "VIF_max", "VIF_avg"):
+        value = training_row.get(key)
+        display = "-" if value is None or (isinstance(value, float) and not np.isfinite(value)) else value
+        summary_lines.append(f"  {key}: {display}")
+
+    internal_row = next((row for row in internal_rows if row.get("Model") == model_id), None)
+    if internal_row:
+        summary_lines.append("")
+        summary_lines.append("Internal validation metrics:")
+        for key in ("R2_loo", "RMSE_loo", "MAE_loo", "s_loo", "R2_kfold", "RMSE_kfold", "MAE_kfold", "s_kfold"):
+            value = internal_row.get(key)
+            display = "-" if value is None or (isinstance(value, float) and not np.isfinite(value)) else value
+            summary_lines.append(f"  {key}: {display}")
+
+    external_row = next((row for row in external_rows if row.get("Model") == model_id), None)
+    if external_row:
+        summary_lines.append("")
+        summary_lines.append("External validation metrics:")
+        for key in ("Q2F1_ext", "Q2F2_ext", "Q2F3_ext", "RMSE_ext", "s_ext", "MAE_ext"):
+            value = external_row.get(key)
+            display = "-" if value is None or (isinstance(value, float) and not np.isfinite(value)) else value
+            summary_lines.append(f"  {key}: {display}")
+
+    return "\n".join(summary_lines).strip() + "\n"
+
+
+def _plot_scatter_cli(
+    ax: Axes,
+    df: pd.DataFrame,
+    *,
+    x_column: str,
+    y_column: str,
+    xlabel: str,
+    ylabel: str,
+    include_identity: bool = False,
+    include_zero_line: bool = False,
+    zero_line_axis: str = "y",
+) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered[x_column].astype(float))]
+    filtered = filtered[np.isfinite(filtered[y_column].astype(float))]
+    if filtered.empty:
+        raise ValueError("Insufficient data to draw the selected chart.")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        x = subset[x_column].astype(float).to_numpy()
+        y = subset[y_column].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(x, y, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    x_values = filtered[x_column].astype(float).to_numpy()
+    y_values = filtered[y_column].astype(float).to_numpy()
+    if include_identity and x_values.size and y_values.size:
+        min_val = float(np.min([np.min(x_values), np.min(y_values)]))
+        max_val = float(np.max([np.max(x_values), np.max(y_values)]))
+        ax.plot([min_val, max_val], [min_val, max_val], color="black", linestyle="--", linewidth=1)
+
+    if include_zero_line:
+        if zero_line_axis == "x":
+            ax.axvline(0.0, color="black", linestyle=":", linewidth=1)
+        else:
+            ax.axhline(0.0, color="black", linestyle=":", linewidth=1)
+
+    ax.legend()
+
+
+def _plot_qq_cli(ax: Axes, df: pd.DataFrame, column: str, ylabel: str) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered[column].astype(float))]
+    if filtered.empty:
+        raise ValueError("Not enough residuals to compute the Q-Q plot.")
+
+    ax.set_xlabel("Theoretical quantiles (Z)")
+    ax.set_ylabel(ylabel)
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        residuals = subset[column].astype(float).to_numpy()
+        residuals = residuals[np.isfinite(residuals)]
+        if residuals.size < 2:
+            continue
+        order = np.argsort(residuals)
+        residuals_sorted = residuals[order]
+        count = residuals_sorted.size
+        probs = (np.arange(1, count + 1) - 0.5) / count
+        theoretical = norm_ppf(probs)
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(theoretical, residuals_sorted, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    min_val = min(ax.get_xlim()[0], ax.get_ylim()[0])
+    max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
+    ax.plot([min_val, max_val], [min_val, max_val], color="black", linestyle="--", linewidth=1)
+    ax.legend()
+
+
+def _plot_residual_distribution_cli(
+    ax: Axes,
+    df: pd.DataFrame,
+    column: str,
+    xlabel: str,
+    base_title: str,
+) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered[column].astype(float))]
+    if filtered.empty:
+        raise ValueError("Insufficient data to draw the selected chart.")
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Frequency")
+    ax.set_title(base_title)
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        values = subset[column].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.hist(values, bins="auto", alpha=0.6, label=dataset, color=color, edgecolor="#ffffff")
+    ax.legend()
+
+
+def _plot_williams_cli(ax: Axes, df: pd.DataFrame, column: str, hat_threshold: float) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered["Leverage"].astype(float))]
+    filtered = filtered[np.isfinite(filtered[column].astype(float))]
+    if filtered.empty:
+        raise ValueError("Insufficient data to draw the Williams plot.")
+
+    ax.set_xlabel("Leverage")
+    ylabel = "Std. residuals (LOO)" if column.endswith("_LOO") else "Std. residuals"
+    ax.set_ylabel(ylabel)
+
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        x = subset["Leverage"].astype(float).to_numpy()
+        y = subset[column].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(x, y, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    if np.isfinite(hat_threshold):
+        ax.axvline(hat_threshold, color="#d62728", linestyle="--", linewidth=1)
+    ax.axhline(0.0, color="black", linestyle=":", linewidth=1)
+    ax.axhline(3.0, color="gray", linestyle="--", linewidth=1)
+    ax.axhline(-3.0, color="gray", linestyle="--", linewidth=1)
+    ax.legend()
+
+
+def _plot_cooks_cli(ax: Axes, df: pd.DataFrame, column: str, ylabel: str, hat_threshold: float) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered["Leverage"].astype(float))]
+    filtered = filtered[np.isfinite(filtered[column].astype(float))]
+    if filtered.empty:
+        raise ValueError("Cook's distance is unavailable for the selected dataset.")
+
+    ax.set_xlabel("Leverage")
+    ax.set_ylabel(ylabel)
+
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        x = subset["Leverage"].astype(float).to_numpy()
+        y = subset[column].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(x, y, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    if np.isfinite(hat_threshold):
+        ax.axvline(hat_threshold, color="#d62728", linestyle="--", linewidth=1)
+    cooks_reference = float("nan")
+    if len(filtered) > 0:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            cooks_reference = float(4.0 / len(filtered))
+    if np.isfinite(cooks_reference):
+        ax.axhline(cooks_reference, color="#d62728", linestyle=":", linewidth=1)
+    ax.legend()
+
+
+def _plot_hat_cli(ax: Axes, df: pd.DataFrame, hat_threshold: float) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered["Leverage"].astype(float))]
+    if filtered.empty:
+        raise ValueError("Leverage values are unavailable for the selected dataset.")
+
+    ax.set_xlabel("Observation")
+    ax.set_ylabel("Leverage")
+
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset].reset_index(drop=True)
+        x = np.arange(1, len(subset) + 1, dtype=float)
+        y = subset["Leverage"].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(x, y, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    if np.isfinite(hat_threshold):
+        ax.axhline(hat_threshold, color="#d62728", linestyle="--", linewidth=1)
+    ax.legend()
+
+
+def _plot_pred_vs_hat_cli(ax: Axes, df: pd.DataFrame, hat_threshold: float) -> None:
+    filtered = df.copy()
+    filtered = filtered[np.isfinite(filtered["Predicted"].astype(float))]
+    filtered = filtered[np.isfinite(filtered["Leverage"].astype(float))]
+    if filtered.empty:
+        raise ValueError("Insufficient data to draw the selected chart.")
+
+    ax.set_xlabel("Leverage")
+    ax.set_ylabel("Predicted values")
+
+    for dataset in filtered["Set"].unique():
+        subset = filtered[filtered["Set"] == dataset]
+        x = subset["Leverage"].astype(float).to_numpy()
+        y = subset["Predicted"].astype(float).to_numpy()
+        color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
+        ax.scatter(x, y, label=dataset, s=50.0, alpha=0.8, color=color)
+
+    if np.isfinite(hat_threshold):
+        ax.axvline(hat_threshold, color="#d62728", linestyle="--", linewidth=1)
+    ax.legend()
+
+
+def _plot_correlation_heatmap_cli(
+    ax: Axes,
+    corr_df: pd.DataFrame,
+    title: str,
+) -> None:
+    if corr_df.empty:
+        raise ValueError("Correlation matrix is empty.")
+    heatmap = ax.imshow(corr_df.values.astype(float), cmap="coolwarm", vmin=-1, vmax=1)
+    ax.set_title(title)
+    ax.set_xticks(range(len(corr_df.columns)))
+    ax.set_xticklabels(corr_df.columns, rotation=45, ha="right")
+    ax.set_yticks(range(len(corr_df.index)))
+    ax.set_yticklabels(corr_df.index)
+    plt.colorbar(heatmap, ax=ax, fraction=0.046, pad=0.04)
+
+
+def _save_heatmap_pdf_from_png(
+    png_path: Path,
+    pdf_path: Path,
+    *,
+    figsize: tuple[float, float],
+    dpi: int,
+) -> None:
+    image = plt.imread(png_path)
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.imshow(image)
+    ax.axis("off")
+    fig.savefig(pdf_path, bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
+
+
+def _prepare_design_matrix_cli(
+    context: EPRSContext,
+    variables: list[str],
+    config: EPRSConfig,
+) -> tuple[np.ndarray, np.ndarray, Optional[tuple[float, float]]]:
+    if not variables:
+        raise ValueError("Select a model with predictors to run Y-randomization.")
+    try:
+        idx = [context.col_idx[var] for var in variables]
+    except KeyError as exc:  # pragma: no cover - defensive
+        raise ValueError("Model predictors are not available in the dataset.") from exc
+    X = context.X_np[:, idx]
+    if X.size == 0:
+        raise ValueError("Unable to build the design matrix for the selected model.")
+    design = np.c_[np.ones((X.shape[0], 1), dtype=float), X.astype(float, copy=False)]
+    y = np.asarray(context.y_np, dtype=float)
+    if design.shape[0] <= design.shape[1]:
+        raise ValueError("Not enough observations to compute Y-randomization.")
+    clip = getattr(config, "clip_predictions", None)
+    return design, y, clip
+
+
+def _compute_metric_for_design_cli(
+    design: np.ndarray,
+    y: np.ndarray,
+    metric_key: str,
+    clip: Optional[tuple[float, float]],
+) -> float:
+    if design.size == 0 or y.size == 0:
+        return float("nan")
+    try:
+        coefficients, *_ = np.linalg.lstsq(design, y, rcond=None)
+    except np.linalg.LinAlgError:
+        return float("nan")
+    preds = design @ coefficients
+    if clip is not None:
+        lo, hi = clip
+        preds = np.clip(preds, lo, hi)
+    if metric_key == "R2":
+        y_mean = float(np.mean(y))
+        ss_tot = float(np.sum((y - y_mean) ** 2))
+        if not np.isfinite(ss_tot) or ss_tot <= 0.0:
+            return float("nan")
+        ss_res = float(np.sum((y - preds) ** 2))
+        if not np.isfinite(ss_res):
+            return float("nan")
+        return float(1.0 - (ss_res / ss_tot))
+    if metric_key == "R2_loo":
+        loo_value = _compute_loo_r2(design, y, clip)
+        if loo_value is None or not np.isfinite(loo_value):
+            return float("nan")
+        return float(loo_value)
+    return float("nan")
+
+
+def _plot_y_randomization_cli(
+    ax: Axes,
+    design: np.ndarray,
+    y: np.ndarray,
+    clip: Optional[tuple[float, float]],
+    metric_key: str,
+) -> None:
+    rng = np.random.default_rng(42)
+    permutations = 1000
+    metrics: list[float] = []
+    for _ in range(permutations):
+        permuted = rng.permutation(y)
+        metric_value = _compute_metric_for_design_cli(design, permuted, metric_key, clip)
+        metrics.append(float(metric_value))
+    values = np.asarray(metrics, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size == 0:
+        raise ValueError("No valid permutation metrics are available for plotting.")
+    bins = max(5, min(30, int(math.sqrt(max(values.size, 1)))))
+    ax.hist(values, bins=bins, color="#1f77b4", edgecolor="#ffffff")
+    metric_label = R_SQUARED_SYMBOL if metric_key == "R2" else f"{Q_SQUARED_SYMBOL} (LOO)"
+    ax.set_xlabel(metric_label)
+    ax.set_ylabel("Frequency")
+    actual_value = _compute_metric_for_design_cli(design, y, metric_key, clip)
+    if np.isfinite(actual_value):
+        ax.axvline(actual_value, color="#d62728", linestyle="--", linewidth=2)
+
+
+def _export_visualizations_cli(
+    diagnostics_df: pd.DataFrame,
+    context: EPRSContext,
+    config: EPRSConfig,
+    variables: list[str],
+    hat_threshold: float,
+    output_dir: Path,
+    model_id: int,
+    formats: Sequence[str],
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    formats = tuple(formats) if formats else ("png",)
+
+    datasets = [("training", "train")]
+    has_test = diagnostics_df["Set"].eq("Testing").any()
+    if has_test:
+        datasets.extend([("testing", "test"), ("both", "train_test")])
+
+    corr_df = _compute_correlation_matrix_cli(context, variables, include_target=False, dataset="training")
+    corr_with_target = _compute_correlation_matrix_cli(
+        context, variables, include_target=True, dataset="training"
+    )
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+    except tk.TclError as exc:  # noqa: BLE001
+        print(f"Warning: Unable to initialize Tk for visualization exports: {exc}")
+        return
+
+    try:
+        notebook = ttk.Notebook(root)
+        visual_tab = _CLIVisualizationTab(notebook, _CLIVizMasterApp())
+        visual_tab.current_model_id = model_id
+        visual_tab.current_variables = list(variables)
+        visual_tab.current_observation_df = diagnostics_df.copy()
+        visual_tab.current_correlation_df = corr_df.copy() if corr_df is not None else None
+        visual_tab.current_correlation_with_target_df = (
+            corr_with_target.copy() if corr_with_target is not None else None
+        )
+        visual_tab.hat_threshold = hat_threshold
+
+        plot_label_map = {key: label for label, key in VisualizationTab.PLOT_OPTIONS}
+        training_only_plot_keys = {
+            "correlation_heatmap",
+            "correlation_heatmap_with_target",
+            "cooks_distance",
+            "cooks_distance_loo",
+        }
+        for dataset_value, suffix in datasets:
+            visual_tab.dataset_filter.set(dataset_value)
+            df = visual_tab._filter_dataframe()
+            if df.empty and dataset_value != "both":
+                continue
+
+            for label, plot_key in VisualizationTab.PLOT_OPTIONS:
+                if plot_key in training_only_plot_keys and dataset_value != "training":
+                    continue
+                plot_method = getattr(visual_tab, f"_plot_{plot_key}", None)
+                if plot_method is None:
+                    continue
+                context_key = (visual_tab.current_model_id, plot_key, visual_tab.dataset_filter.get())
+                if context_key != visual_tab._axis_default_context:
+                    visual_tab._axis_default_context = context_key
+                    visual_tab._axis_user_override = {"x": False, "y": False}
+                    visual_tab._axis_parameters = {"x": None, "y": None}
+                    visual_tab._identity_limits_snapshot = None
+                    visual_tab._use_identity_snapshot = False
+                    visual_tab._stored_limits = {"x": None, "y": None}
+                is_heatmap = visual_tab._is_heatmap_plot_key(plot_key)
+                if is_heatmap:
+                    visual_tab.ax = visual_tab._ensure_heatmap_axis()
+                else:
+                    visual_tab._clear_heatmap_artifacts()
+                    visual_tab.ax = visual_tab._primary_axes
+                visual_tab.ax.clear()
+                if not is_heatmap:
+                    visual_tab._enforce_axis_ratio()
+                try:
+                    custom_title = plot_method(df)
+                except Exception:  # noqa: BLE001
+                    continue
+                title = custom_title or visual_tab.PLOT_TITLES.get(plot_key, "")
+                if title:
+                    visual_tab.ax.set_title(title)
+                if is_heatmap:
+                    try:
+                        visual_tab.ax.set_aspect("equal", adjustable="box")
+                        visual_tab.ax.set_box_aspect(1.0)
+                    except Exception:  # noqa: BLE001
+                        pass
+                if not is_heatmap:
+                    visual_tab._apply_axis_formatting()
+                safe_label = _sanitize_plot_label(plot_label_map.get(plot_key, label))
+                if is_heatmap:
+                    base_path = output_dir / f"model_{model_id}_{safe_label}_{suffix}"
+                    png_requested = "png" in formats
+                    pdf_requested = "pdf" in formats
+                    png_path = base_path.with_suffix(".png")
+                    if png_requested or pdf_requested:
+                        png_dpi = 300 if pdf_requested else 1000
+                        visual_tab.figure.savefig(png_path, bbox_inches="tight", dpi=png_dpi)
+                    for fmt in formats:
+                        if fmt in {"png", "pdf"}:
+                            continue
+                        file_path = base_path.with_suffix(f".{fmt}")
+                        visual_tab.figure.savefig(file_path, bbox_inches="tight", dpi=1000)
+                    if pdf_requested:
+                        _save_heatmap_pdf_from_png(
+                            png_path,
+                            base_path.with_suffix(".pdf"),
+                            figsize=tuple(visual_tab.figure.get_size_inches()),
+                            dpi=300,
+                        )
+                        if not png_requested:
+                            png_path.unlink(missing_ok=True)
+                else:
+                    for fmt in formats:
+                        file_path = output_dir / f"model_{model_id}_{safe_label}_{suffix}.{fmt}"
+                        target_dpi = 1000 if fmt != "pdf" else 300
+                        visual_tab.figure.savefig(file_path, bbox_inches="tight", dpi=target_dpi)
+
+        design, y, clip = _prepare_design_matrix_cli(context, variables, config)
+        for _dataset_value, suffix in datasets:
+            for fmt in formats:
+                fig, ax = plt.subplots(figsize=(6, 4))
+                _plot_y_randomization_cli(ax, design, y, clip, "R2")
+                label = _sanitize_plot_label(VisualizationTab.PLOT_TITLES.get("y_randomization_r2", "Y-Randomization"))
+                file_path = output_dir / f"model_{model_id}_{label}_{suffix}.{fmt}"
+                target_dpi = 1000 if fmt != "pdf" else 300
+                fig.savefig(file_path, bbox_inches="tight", dpi=target_dpi)
+                plt.close(fig)
+    finally:
+        try:
+            root.destroy()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def run_cli(config_path: Union[str, Path], *, output_spec: Optional[CLIOutputSpec] = None, model_id: Optional[int] = None, noruns: bool = False) -> None:
     _ensure_heavy_imports_loaded()
 
     print(f"Loaded configuration from {config_path}")
@@ -1714,6 +2785,7 @@ def run_cli(config_path: Union[str, Path]) -> None:
         constant_threshold=config.constant_threshold,
         excluded_observations=config.excluded_observations,
     )
+    _load_external_validation_dataset_cli(context, config)
 
     total_combos = _compute_combination_total(len(context.cols), config.max_vars)
     threshold = _combination_efficiency_threshold(config.max_vars)
@@ -1807,63 +2879,130 @@ def run_cli(config_path: Union[str, Path]) -> None:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
-    runner = run_all_subsets if config.method == "all_subsets" else run_eprs
-    result = runner(
-        context,
-        config,
-        progress_callback=progress_callback,
-        progress_hook=progress_hook,
-        stop_event=None,
-    )
-
-    total_cpu_minutes = float(result.get("cpu_time_total", 0.0))
-    search_cpu_minutes = float(result.get("cpu_time_search", total_cpu_minutes))
-
-    print()
-    results_df = result.get("results_df")
-    models_found = int(result.get("models_found", 0))
-    models_explored = int(result.get("models_explored", 0))
-    print(f"Total models explored: {models_explored}")
-    metric_label = TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric)
-    comparator = ">=" if config.target_metric != "RMSE_loo" else "<="
-    threshold_display = _format_threshold_display(getattr(config, "tm_cutoff", None))
-    if getattr(config, "tm_cutoff", None) is None:
-        print(f"Models reported without cutoff: {models_found}")
-    else:
-        print(
-            f"Models with {metric_label} {comparator} {threshold_display}: {models_found}"
-        )
-    filtered_models = len(results_df.index) if results_df is not None else 0
-    print(f"Filtrated and reported models: {filtered_models}")
-
-    export_df = results_df if results_df is not None else pd.DataFrame()
-
-    if export_df.empty:
-        print(
-            "No models met the reporting threshold. "
-            "An empty results file will be written."
+    export_path = Path(output_path)
+    if not noruns:
+        runner = run_all_subsets if config.method == "all_subsets" else run_eprs
+        result = runner(
+            context,
+            config,
+            progress_callback=progress_callback,
+            progress_hook=progress_hook,
+            stop_event=None,
         )
 
-    export_path = export_results_to_csv_cli(
-        export_df,
-        config,
-        split_settings,
-        output_path,
-        cpu_search_minutes=search_cpu_minutes,
-        cpu_total_minutes=total_cpu_minutes,
-        models_found=models_found,
-        models_explored=models_explored,
-        avg_iterations_per_seed=result.get("avg_r2_calls"),
-        max_iterations_per_seed=result.get("max_r2_calls"),
-    )
-    print(
-        f"Model search CPU time: {search_cpu_minutes * 60.0:.2f} s "
-        f"({search_cpu_minutes:.2f} min)"
-    )
-    print(f"Total CPU time: {total_cpu_minutes * 60.0:.2f} s ({total_cpu_minutes:.2f} min)")
-    print()
-    print(f"Results exported to {export_path}")
-    print("Finished.")
+        total_cpu_minutes = float(result.get("cpu_time_total", 0.0))
+        search_cpu_minutes = float(result.get("cpu_time_search", total_cpu_minutes))
+
+        print()
+        results_df = result.get("results_df")
+        models_found = int(result.get("models_found", 0))
+        models_explored = int(result.get("models_explored", 0))
+        print(f"Total models explored: {models_explored}")
+        metric_label = TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric)
+        comparator = ">=" if config.target_metric != "RMSE_loo" else "<="
+        threshold_display = _format_threshold_display(getattr(config, "tm_cutoff", None))
+        if getattr(config, "tm_cutoff", None) is None:
+            print(f"Models reported without cutoff: {models_found}")
+        else:
+            print(
+                f"Models with {metric_label} {comparator} {threshold_display}: {models_found}"
+            )
+        filtered_models = len(results_df.index) if results_df is not None else 0
+        print(f"Filtrated and reported models: {filtered_models}")
+
+        export_df = results_df if results_df is not None else pd.DataFrame()
+
+        if export_df.empty:
+            print(
+                "No models met the reporting threshold. "
+                "An empty results file will be written."
+            )
+
+        export_path = export_results_to_csv_cli(
+            export_df,
+            config,
+            split_settings,
+            output_path,
+            context=context,
+            cpu_search_minutes=search_cpu_minutes,
+            cpu_total_minutes=total_cpu_minutes,
+            models_found=models_found,
+            models_explored=models_explored,
+            avg_iterations_per_seed=result.get("avg_r2_calls"),
+            max_iterations_per_seed=result.get("max_r2_calls"),
+        )
+        print(
+            f"Model search CPU time: {search_cpu_minutes * 60.0:.2f} s "
+            f"({search_cpu_minutes:.2f} min)"
+        )
+        print(
+            f"Total CPU time: {total_cpu_minutes * 60.0:.2f} s ({total_cpu_minutes:.2f} min)"
+        )
+        print()
+        print(f"Results exported to {export_path}")
+        print("Finished.")
+
+    if output_spec and (output_spec.diagnostics or output_spec.visualization or output_spec.summary):
+        if model_id is None:
+            raise ValueError("Model identifier is required when requesting outputs.")
+        training_df, internal_rows, external_rows, _metadata = _read_results_file_cli(export_path)
+        if training_df.empty:
+            raise ValueError("No training results found in the results file.")
+        match = training_df[training_df["Model"] == model_id]
+        if match.empty:
+            raise ValueError(f"Model {model_id} not found in the results file.")
+        row = match.iloc[0].to_dict()
+        variables = MLRXApp._normalize_variables(row.get("Variables"))
+        if not variables:
+            raise ValueError("Selected model has no predictors available.")
+
+        diagnostics_df, hat_threshold = compute_observation_diagnostics(context, config, variables)
+        if diagnostics_df.empty:
+            raise ValueError("Observation diagnostics are unavailable for the selected model.")
+
+        base_output_dir = export_path.parent if export_path.parent else Path(".")
+        if output_spec.diagnostics:
+            tables_dir = base_output_dir / "Tables"
+            _export_diagnostics_cli(
+                diagnostics_df,
+                context,
+                variables,
+                tables_dir,
+                model_id,
+            )
+            print(f"Diagnostics exported to {tables_dir}")
+
+        if output_spec.visualization:
+            figures_dir = base_output_dir / "Figures"
+            _export_visualizations_cli(
+                diagnostics_df,
+                context,
+                config,
+                variables,
+                hat_threshold,
+                figures_dir,
+                model_id,
+                output_spec.visualization_formats,
+            )
+            print(f"Visualizations exported to {figures_dir}")
+
+        if output_spec.summary:
+            summary_text = _build_summary_text_cli(
+                context,
+                config,
+                model_id,
+                variables,
+                row,
+                internal_rows,
+                external_rows,
+                use_recommended_covariance=output_spec.summary_recommended_covariance,
+            )
+            summary_path = base_output_dir / f"model_{model_id}_summary.txt"
+            summary_path.write_text(summary_text, encoding="utf-8")
+            print(f"Summary exported to {summary_path}")
+
+        if noruns:
+            print("Output export completed.")
 
 
 def _parse_id_entries(text: str) -> set[str]:
@@ -3032,6 +4171,185 @@ def _evaluate_model_loo(
     }
 
 
+def _evaluate_model_kfold(
+    context: EPRSContext,
+    variables: list[str],
+    folds: int,
+    repeats: int,
+    clip_predictions: Optional[tuple[float, float]],
+) -> dict[str, float]:
+    if folds < 2:
+        raise ValueError("k-fold: the number of folds must be at least 2.")
+    if repeats < 1:
+        raise ValueError("k-fold: repeats must be at least 1.")
+
+    X = take(context, variables)
+    y = context.y_np.astype(float)
+
+    rng = np.random.default_rng(42)
+    metrics = []
+    sse_total = 0.0
+    dof_total = 0.0
+    s_values: list[float] = []
+    param_count = len(variables) + 1
+    for _ in range(repeats):
+        indices = np.arange(X.shape[0])
+        rng.shuffle(indices)
+        fold_sizes = np.full(folds, X.shape[0] // folds, dtype=int)
+        fold_sizes[: X.shape[0] % folds] += 1
+        current = 0
+        for fold_size in fold_sizes:
+            start, stop = current, current + fold_size
+            test_idx = indices[start:stop]
+            train_idx = np.concatenate((indices[:start], indices[stop:]))
+            current = stop
+
+            if not len(train_idx) or not len(test_idx):
+                raise ValueError("k-fold: insufficient data for the requested folds.")
+
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
+
+            design_train = np.c_[np.ones(X_train.shape[0]), X_train]
+            try:
+                coef, *_ = np.linalg.lstsq(design_train, y_train, rcond=None)
+            except np.linalg.LinAlgError as exc:  # noqa: BLE001
+                raise ValueError("k-fold: failed to fit the model.") from exc
+
+            preds = np.c_[np.ones(X_test.shape[0]), X_test] @ coef
+            if clip_predictions is not None:
+                lo, hi = clip_predictions
+                preds = np.clip(preds, lo, hi)
+
+            resid = y_test - preds
+            metrics.append(
+                {
+                    "r2": float(r2_score(y_test, preds)),
+                    "rmse": float(np.sqrt(mean_squared_error(y_test, preds))),
+                    "mae": float(mean_absolute_error(y_test, preds)),
+                    "sse": float(np.dot(resid, resid)),
+                    "dof": float(len(y_test) - param_count),
+                }
+            )
+
+            sse_total += metrics[-1]["sse"]
+            dof_total += metrics[-1]["dof"]
+            s_values.append(_compute_standard_error(resid, param_count))
+
+    if not metrics:
+        raise ValueError("k-fold: no evaluations were performed.")
+
+    r2_values = [metric["r2"] for metric in metrics]
+    rmse_values = [metric["rmse"] for metric in metrics]
+    mae_values = [metric["mae"] for metric in metrics]
+    if dof_total > 0:
+        s_kfold = float(math.sqrt(sse_total / dof_total)) if sse_total >= 0 else float("nan")
+    elif s_values:
+        s_kfold = float(np.nanmean(s_values))
+    else:
+        s_kfold = float("nan")
+    if (not np.isfinite(s_kfold)) and s_values:
+        s_kfold = float(np.nanmean(s_values))
+
+    return {
+        "R2_kfold": float(np.mean(r2_values)),
+        "RMSE_kfold": float(np.mean(rmse_values)),
+        "s_kfold": s_kfold,
+        "MAE_kfold": float(np.mean(mae_values)),
+    }
+
+
+def _compute_external_metrics(
+    context: EPRSContext,
+    config: EPRSConfig,
+    variables: list[str],
+    ext_df: pd.DataFrame,
+) -> dict:
+    target_col = context.target_column
+    if target_col not in ext_df.columns:
+        raise ValueError(
+            f"Dependent variable '{target_col}' is not present in the external dataset."
+        )
+
+    missing = [v for v in variables if v not in ext_df.columns]
+    if missing:
+        raise ValueError(
+            "Missing predictor columns for external evaluation: " + ", ".join(missing)
+        )
+
+    Xm = take(context, variables)
+    if Xm.size == 0:
+        raise ValueError("Model has no predictors to evaluate.")
+    exog = np.c_[np.ones(Xm.shape[0], dtype=Xm.dtype), Xm]
+    model = sm.OLS(context.y_np, exog).fit()
+
+    ext_matrix = ext_df.loc[:, variables].to_numpy(dtype=np.float64, copy=False)
+    if ext_matrix.size == 0:
+        raise ValueError("External dataset does not contain values for the selected predictors.")
+    ext_exog = np.c_[np.ones(ext_matrix.shape[0], dtype=ext_matrix.dtype), ext_matrix]
+    preds = ext_exog @ model.params
+    if config.clip_predictions is not None:
+        lo, hi = config.clip_predictions
+        preds = np.clip(preds, lo, hi)
+
+    y_true = ext_df.loc[:, target_col].to_numpy(dtype=np.float64, copy=False)
+    residuals = y_true - preds
+    param_count = len(variables) + 1
+    sum_squared_errors = float(np.dot(residuals, residuals))
+    train_mean = (
+        float(np.nanmean(context.y_np)) if context.y_np.size else float("nan")
+    )
+    test_mean = float(np.nanmean(y_true)) if y_true.size else float("nan")
+    n_train = int(context.y_np.size)
+    n_ext = int(y_true.size)
+    if n_train > 0 and np.isfinite(train_mean):
+        train_centered = np.asarray(context.y_np, dtype=np.float64) - train_mean
+        train_centered_sum = float(np.dot(train_centered, train_centered))
+    else:
+        train_centered_sum = float("nan")
+
+    def _safe_q2(denominator: float) -> float:
+        if not np.isfinite(sum_squared_errors) or not np.isfinite(denominator):
+            return float("nan")
+        if denominator <= 0:
+            return float("nan")
+        return float(1.0 - (sum_squared_errors / denominator))
+
+    denom_f1 = float(np.dot(y_true - train_mean, y_true - train_mean))
+    denom_f2 = float(np.dot(y_true - test_mean, y_true - test_mean))
+
+    q2_ext = _safe_q2(denom_f2)
+
+    if (
+        not np.isfinite(sum_squared_errors)
+        or n_ext <= 0
+        or n_train <= 0
+        or not np.isfinite(train_centered_sum)
+    ):
+        q2f3_ext = float("nan")
+    else:
+        mse_ext = sum_squared_errors / n_ext if n_ext else float("nan")
+        denom_f3 = train_centered_sum / n_train if n_train else float("nan")
+        if (
+            not np.isfinite(mse_ext)
+            or not np.isfinite(denom_f3)
+            or denom_f3 <= 0
+        ):
+            q2f3_ext = float("nan")
+        else:
+            q2f3_ext = float(1.0 - (mse_ext / denom_f3))
+
+    return {
+        "R2_ext": q2_ext,
+        "RMSE_ext": float(np.sqrt(mean_squared_error(y_true, preds))),
+        "s_ext": _compute_standard_error(residuals, param_count),
+        "MAE_ext": float(mean_absolute_error(y_true, preds)),
+        "Q2F1_ext": _safe_q2(denom_f1),
+        "Q2F2_ext": q2_ext,
+        "Q2F3_ext": q2f3_ext,
+    }
+
+
 def make_vif_funcs(context: EPRSContext):
     vif_cache: dict[tuple[str, ...], np.ndarray] = {}
 
@@ -4178,7 +5496,6 @@ class MLRXApp(tk.Tk):
         self.notebook.add(self.variable_tab, text="Desktop")
         self.notebook.add(self.help_tab, text="  Help  ")
 
-        self.notebook.tab(self.validation_tab, state="disabled")
         self.notebook.tab(self.summary_tab, state="disabled")
         self.notebook.tab(self.diagnostics_tab, state="disabled")
         self.notebook.tab(self.visual_tab, state="disabled")
@@ -4456,7 +5773,7 @@ class MLRXApp(tk.Tk):
         params_frame = ttk.LabelFrame(self.config_tab, text="Settings")
         params_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-        settings_row_padding = {"padx": padding["padx"], "pady": (5, 5)}
+        settings_row_padding = {"padx": padding["padx"], "pady": (4, 4)}
 
         defaults = EPRSConfig()
         self.constant_threshold_var.set(str(defaults.constant_threshold))
@@ -6233,10 +7550,6 @@ class MLRXApp(tk.Tk):
             self.validation_tab.update_sources(
                 training_df, self.last_context, self.last_config
             )
-            if self.validation_tab.available:
-                self.notebook.tab(self.validation_tab, state="normal")
-            else:
-                self.notebook.tab(self.validation_tab, state="disabled")
             if self.last_results_df is not None and not self.last_results_df.empty:
                 self.notebook.tab(self.summary_tab, state="normal")
                 self.notebook.tab(self.diagnostics_tab, state="normal")
@@ -6527,7 +7840,6 @@ class MLRXApp(tk.Tk):
         self.visual_tab.prepare_for_new_run()
         self.variable_tab.prepare_for_new_run()
 
-        self.notebook.tab(self.validation_tab, state="disabled")
         self.notebook.tab(self.summary_tab, state="disabled")
         self.notebook.tab(self.diagnostics_tab, state="disabled")
         self.notebook.tab(self.visual_tab, state="disabled")
@@ -6808,6 +8120,85 @@ class MLRXApp(tk.Tk):
         self._update_kfold_settings(info["enabled"], info.get("folds"), info.get("repeats"))
         return info
 
+    def _sanitize_validation_metadata(self, meta: Optional[dict]) -> dict:
+        info = {
+            "enabled": False,
+            "loo": True,
+            "kfold": {"enabled": False, "folds": None, "repeats": None},
+            "external_path": "none",
+            "selection": "all",
+        }
+        if not isinstance(meta, dict):
+            return info
+        info["enabled"] = bool(meta.get("enabled", False))
+        info["loo"] = bool(meta.get("loo", True))
+        info["kfold"] = self._sanitize_kfold_metadata(meta.get("kfold"))
+        external_path = str(meta.get("external_path", "") or "").strip()
+        info["external_path"] = external_path or "none"
+        selection = str(meta.get("selection", "all") or "all").strip().lower()
+        info["selection"] = selection or "all"
+        return info
+
+    def _build_validation_metadata(
+        self,
+        config: Optional[EPRSConfig],
+        fallback: Optional[dict] = None,
+    ) -> dict:
+        info = self._sanitize_validation_metadata(fallback)
+        if config is not None:
+            info.update(_build_validation_metadata_from_config(config))
+
+        validation_tab = getattr(self, "validation_tab", None)
+        if validation_tab is not None:
+            try:
+                info["loo"] = bool(validation_tab.use_loo.get())
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                info["kfold"] = self._build_kfold_metadata(info.get("kfold"))
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                info["selection"] = validation_tab.selection_mode.get()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                external_path = str(self.external_test_path.get()).strip()
+                info["external_path"] = external_path or "none"
+            except Exception:  # noqa: BLE001
+                pass
+
+        info["enabled"] = bool(
+            info.get("enabled")
+            or (config is not None and config.validation_enabled)
+            or bool(getattr(self, "last_internal_results", []))
+            or bool(getattr(self, "last_external_results", []))
+        )
+        return info
+
+    def _apply_validation_metadata(self, raw_meta: Optional[dict]) -> dict:
+        info = self._sanitize_validation_metadata(raw_meta)
+        validation_tab = getattr(self, "validation_tab", None)
+        if validation_tab is not None:
+            try:
+                validation_tab.use_loo.set(info.get("loo", True))
+                kfold_meta = self._apply_kfold_metadata(info.get("kfold"))
+                info["kfold"] = kfold_meta
+                selection = info.get("selection", "all") or "all"
+                validation_tab.selection_mode.set(selection)
+                validation_tab._update_selection_controls()
+                validation_tab._update_method_controls()
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            external_path = info.get("external_path", "none")
+            if isinstance(external_path, str) and external_path.lower() == "none":
+                external_path = ""
+            self.external_test_path.set(external_path or "")
+        except Exception:  # noqa: BLE001
+            pass
+        return info
+
     def _update_kfold_settings(
         self, enabled: bool, folds: Optional[int], repeats: Optional[int]
     ) -> None:
@@ -6895,6 +8286,9 @@ class MLRXApp(tk.Tk):
             metadata["clip"] = {"enabled": False}
 
         metadata["kfold"] = self._build_kfold_metadata(metadata.get("kfold"))
+        metadata["validation"] = self._build_validation_metadata(
+            config, metadata.get("validation")
+        )
 
         if models_found is not None:
             try:
@@ -7027,6 +8421,9 @@ class MLRXApp(tk.Tk):
                 pass
 
         metadata["kfold"] = self._build_kfold_metadata(metadata.get("kfold"))
+        metadata["validation"] = self._build_validation_metadata(
+            self.last_config, metadata.get("validation")
+        )
 
         def _resolve_minutes(primary: Optional[float], fallback: object) -> Optional[float]:
             for candidate in (primary, fallback):
@@ -7462,6 +8859,8 @@ class MLRXApp(tk.Tk):
 
         kfold_info = self._apply_kfold_metadata(metadata.get("kfold"))
         sanitized_metadata["kfold"] = kfold_info
+        validation_info = self._apply_validation_metadata(metadata.get("validation"))
+        sanitized_metadata["validation"] = validation_info
 
         self.last_results_metadata = sanitized_metadata
 
@@ -7984,7 +9383,6 @@ class MLRXApp(tk.Tk):
         self.run_button.configure(state="disabled")
         self.cancel_button.configure(state="normal")
         self.stop_event.clear()
-        self.notebook.tab(self.validation_tab, state="disabled")
         self.notebook.tab(self.summary_tab, state="disabled")
         self.notebook.tab(self.diagnostics_tab, state="disabled")
         self.notebook.tab(self.visual_tab, state="disabled")
@@ -8119,10 +9517,6 @@ class MLRXApp(tk.Tk):
             self._load_training_results(results_df)
             holdout_results = self._derive_holdout_results(self.last_results_df)
             self.validation_tab.update_sources(results_df, self.last_context, self.last_config)
-            if self.validation_tab.available:
-                self.notebook.tab(self.validation_tab, state="normal")
-            else:
-                self.notebook.tab(self.validation_tab, state="disabled")
             self.notebook.tab(self.diagnostics_tab, state="normal")
             self.notebook.tab(self.visual_tab, state="normal")
             if holdout_results:
@@ -8149,7 +9543,6 @@ class MLRXApp(tk.Tk):
             self.training_tree.delete(*self.training_tree.get_children())
             self.update_internal_results([])
             self.validation_tab.prepare_for_new_run()
-            self.notebook.tab(self.validation_tab, state="disabled")
             self.summary_tab.prepare_for_new_run()
             self.notebook.tab(self.summary_tab, state="disabled")
             self.diagnostics_tab.prepare_for_new_run()
@@ -8193,7 +9586,6 @@ class MLRXApp(tk.Tk):
         self.run_button.configure(state="normal")
         self.cancel_button.configure(state="disabled")
         self.validation_tab.prepare_for_new_run()
-        self.notebook.tab(self.validation_tab, state="disabled")
         self.summary_tab.prepare_for_new_run()
         self.notebook.tab(self.summary_tab, state="disabled")
         self.diagnostics_tab.prepare_for_new_run()
@@ -8213,7 +9605,6 @@ class MLRXApp(tk.Tk):
         self.run_button.configure(state="normal")
         self.cancel_button.configure(state="disabled")
         self.validation_tab.prepare_for_new_run()
-        self.notebook.tab(self.validation_tab, state="disabled")
         self.summary_tab.prepare_for_new_run()
         self.notebook.tab(self.summary_tab, state="disabled")
         self.diagnostics_tab.prepare_for_new_run()
@@ -9416,6 +10807,33 @@ class MLRXApp(tk.Tk):
                 )
             params["max_iterations_per_seed"] = parsed_manual
 
+        validation_tab = getattr(self, "validation_tab", None)
+        if validation_tab is not None:
+            try:
+                params["validation_loo"] = bool(validation_tab.use_loo.get())
+            except Exception:  # noqa: BLE001
+                params["validation_loo"] = defaults.validation_loo
+            try:
+                params["validation_kfold_enabled"] = bool(validation_tab.use_kfold.get())
+            except Exception:  # noqa: BLE001
+                params["validation_kfold_enabled"] = defaults.validation_kfold_enabled
+            try:
+                params["validation_kfold_folds"] = int(validation_tab.kfold_folds_var.get())
+            except Exception:  # noqa: BLE001
+                params["validation_kfold_folds"] = defaults.validation_kfold_folds
+            try:
+                params["validation_kfold_repeats"] = int(validation_tab.kfold_repeats_var.get())
+            except Exception:  # noqa: BLE001
+                params["validation_kfold_repeats"] = defaults.validation_kfold_repeats
+            try:
+                external_path = str(self.external_test_path.get()).strip()
+            except Exception:  # noqa: BLE001
+                external_path = defaults.validation_external_path
+            params["validation_external_path"] = external_path
+            params["validation_enabled"] = bool(
+                params["validation_loo"] or params["validation_kfold_enabled"]
+            )
+
         return EPRSConfig(**params)
 
     def _save_configuration_file(self) -> None:
@@ -9550,6 +10968,26 @@ class MLRXApp(tk.Tk):
 
         self.last_split_settings = split_settings
 
+        if hasattr(self, "validation_tab"):
+            validation_tab = self.validation_tab
+            try:
+                validation_tab.use_loo.set(config.validation_loo)
+                validation_tab.use_kfold.set(bool(config.validation_kfold_enabled))
+                if config.validation_kfold_folds:
+                    validation_tab.kfold_folds_var.set(int(config.validation_kfold_folds))
+                if config.validation_kfold_repeats:
+                    validation_tab.kfold_repeats_var.set(int(config.validation_kfold_repeats))
+                if config.validation_enabled:
+                    validation_tab.selection_mode.set("all")
+                validation_tab._update_method_controls()
+                validation_tab._update_selection_controls()
+            except Exception:  # noqa: BLE001
+                pass
+
+        external_path = (config.validation_external_path or "").strip()
+        if external_path:
+            self.external_test_path.set(external_path)
+
     def _load_configuration_file(self) -> None:
         config_path = filedialog.askopenfilename(
             title="Load configuration",
@@ -9610,7 +11048,7 @@ class ValidationTab(ttk.Frame):
         self.dataset_path_var = master_app.external_test_path
         self.delimiter_var = master_app.external_delimiter_var
 
-        self.selection_mode = tk.StringVar(value="top")
+        self.selection_mode = tk.StringVar(value="all")
         self.top_models_var = tk.StringVar(value="1000")
         self.multiple_models_var = tk.StringVar()
 
@@ -9762,16 +11200,14 @@ class ValidationTab(ttk.Frame):
             row=0, column=1, sticky="e"
         )
 
-        self._update_selection_controls()
-        self._update_method_controls()
-        self.sync_split_mode(self.master_app.split_mode.get())
+        self.set_available(False)
 
     def prepare_for_new_run(self):
         self.results_df = None
         self.context = None
         self.config = None
         self.pending_context = False
-        self.selection_mode.set("top")
+        self.selection_mode.set("all")
         self.top_models_var.set("1000")
         self.multiple_models_var.set("")
         self.use_loo.set(True)
@@ -9817,7 +11253,7 @@ class ValidationTab(ttk.Frame):
         if has_results and not has_context:
             self.pending_context = True
         if has_results:
-            self.selection_mode.set("top")
+            self.selection_mode.set("all")
             self.top_models_var.set("1000")
         self.set_available(has_results)
         if not has_results:
@@ -9869,17 +11305,16 @@ class ValidationTab(ttk.Frame):
             self.top_entry.configure(state="disabled")
             self.multiple_entry.configure(state="disabled")
             return
-
         mode = self.selection_mode.get()
         self.top_entry.configure(state="normal" if mode == "top" else "disabled")
         self.multiple_entry.configure(state="normal" if mode == "multiple" else "disabled")
 
     def _update_method_controls(self):
-        base_state = "normal" if self.available else "disabled"
+        base_state = "normal"
         self.loo_check.configure(state=base_state)
         self.kfold_check.configure(state=base_state)
 
-        entry_state = "normal" if (self.available and self.use_kfold.get()) else "disabled"
+        entry_state = "normal" if self.use_kfold.get() else "disabled"
         self.kfold_folds_entry.configure(state=entry_state)
         self.kfold_repeats_entry.configure(state=entry_state)
 
@@ -10303,82 +11738,13 @@ class ValidationTab(ttk.Frame):
     ) -> dict[str, float]:
         if self.context is None:
             raise ValueError("No dataset is available for internal validation.")
-
-        X = take(self.context, variables)
-        y = self.context.y_np.astype(float)
-
-        rng = np.random.default_rng(42)
-        metrics = []
-        sse_total = 0.0
-        dof_total = 0.0
-        s_values: list[float] = []
-        param_count = len(variables) + 1
-        for _ in range(repeats):
-            indices = np.arange(X.shape[0])
-            rng.shuffle(indices)
-            fold_sizes = np.full(folds, X.shape[0] // folds, dtype=int)
-            fold_sizes[: X.shape[0] % folds] += 1
-            current = 0
-            for fold_size in fold_sizes:
-                start, stop = current, current + fold_size
-                test_idx = indices[start:stop]
-                train_idx = np.concatenate((indices[:start], indices[stop:]))
-                current = stop
-
-                if not len(train_idx) or not len(test_idx):
-                    raise ValueError("k-fold: insufficient data for the requested folds.")
-
-                X_train, X_test = X[train_idx], X[test_idx]
-                y_train, y_test = y[train_idx], y[test_idx]
-
-                design_train = np.c_[np.ones(X_train.shape[0]), X_train]
-                try:
-                    coef, *_ = np.linalg.lstsq(design_train, y_train, rcond=None)
-                except np.linalg.LinAlgError as exc:  # noqa: BLE001
-                    raise ValueError("k-fold: failed to fit the model.") from exc
-
-                preds = np.c_[np.ones(X_test.shape[0]), X_test] @ coef
-                preds = self._clip_predictions(preds)
-
-                residuals = y_test - preds
-                mse = mean_squared_error(y_test, preds)
-                rmse = float(np.sqrt(mse))
-                mae = float(mean_absolute_error(y_test, preds))
-                r2 = float(r2_score(y_test, preds))
-
-                s_fold = _compute_standard_error(residuals, param_count)
-                if np.isfinite(s_fold):
-                    s_values.append(float(s_fold))
-
-                sse = float(np.dot(residuals, residuals))
-                if np.isfinite(sse):
-                    sse_total += sse
-                dof = residuals.size - max(param_count, 1)
-                if dof <= 0:
-                    dof = residuals.size
-                if dof > 0 and np.isfinite(dof):
-                    dof_total += float(dof)
-
-                metrics.append((r2, rmse, mae))
-
-        if not metrics:
-            raise ValueError("k-fold: no evaluations were performed.")
-
-        r2_values, rmse_values, mae_values = zip(*metrics)
-        if dof_total > 0:
-            s_kfold = float(math.sqrt(sse_total / dof_total)) if sse_total >= 0 else float("nan")
-        elif s_values:
-            s_kfold = float(np.nanmean(s_values))
-        else:
-            s_kfold = float("nan")
-        if (not np.isfinite(s_kfold)) and s_values:
-            s_kfold = float(np.nanmean(s_values))
-        return {
-            "R2_kfold": float(np.mean(r2_values)),
-            "RMSE_kfold": float(np.mean(rmse_values)),
-            "s_kfold": s_kfold,
-            "MAE_kfold": float(np.mean(mae_values)),
-        }
+        return _evaluate_model_kfold(
+            self.context,
+            variables,
+            folds,
+            repeats,
+            getattr(self.config, "clip_predictions", None),
+        )
 
     def _compute_external_metrics(
         self,
@@ -10388,89 +11754,7 @@ class ValidationTab(ttk.Frame):
         if self.context is None or self.config is None:
             raise ValueError("Training context is unavailable.")
 
-        target_col = self.context.target_column
-        if target_col not in ext_df.columns:
-            raise ValueError(
-                f"Dependent variable '{target_col}' is not present in the external dataset."
-            )
-
-        missing = [v for v in variables if v not in ext_df.columns]
-        if missing:
-            raise ValueError(
-                "Missing predictor columns for external evaluation: " + ", ".join(missing)
-            )
-
-        Xm = take(self.context, variables)
-        if Xm.size == 0:
-            raise ValueError("Model has no predictors to evaluate.")
-        exog = np.c_[np.ones(Xm.shape[0], dtype=Xm.dtype), Xm]
-        model = sm.OLS(self.context.y_np, exog).fit()
-
-        ext_matrix = ext_df.loc[:, variables].to_numpy(dtype=np.float64, copy=False)
-        if ext_matrix.size == 0:
-            raise ValueError("External dataset does not contain values for the selected predictors.")
-        ext_exog = np.c_[np.ones(ext_matrix.shape[0], dtype=ext_matrix.dtype), ext_matrix]
-        preds = ext_exog @ model.params
-        if self.config.clip_predictions is not None:
-            lo, hi = self.config.clip_predictions
-            preds = np.clip(preds, lo, hi)
-
-        y_true = ext_df.loc[:, target_col].to_numpy(dtype=np.float64, copy=False)
-        residuals = y_true - preds
-        param_count = len(variables) + 1
-        sum_squared_errors = float(np.dot(residuals, residuals))
-        train_mean = (
-            float(np.nanmean(self.context.y_np)) if self.context.y_np.size else float("nan")
-        )
-        test_mean = float(np.nanmean(y_true)) if y_true.size else float("nan")
-        n_train = int(self.context.y_np.size)
-        n_ext = int(y_true.size)
-        if n_train > 0 and np.isfinite(train_mean):
-            train_centered = np.asarray(self.context.y_np, dtype=np.float64) - train_mean
-            train_centered_sum = float(np.dot(train_centered, train_centered))
-        else:
-            train_centered_sum = float("nan")
-
-        def _safe_q2(denominator: float) -> float:
-            if not np.isfinite(sum_squared_errors) or not np.isfinite(denominator):
-                return float("nan")
-            if denominator <= 0:
-                return float("nan")
-            return float(1.0 - (sum_squared_errors / denominator))
-
-        denom_f1 = float(np.dot(y_true - train_mean, y_true - train_mean))
-        denom_f2 = float(np.dot(y_true - test_mean, y_true - test_mean))
-
-        q2_ext = _safe_q2(denom_f2)
-
-        if (
-            not np.isfinite(sum_squared_errors)
-            or n_ext <= 0
-            or n_train <= 0
-            or not np.isfinite(train_centered_sum)
-        ):
-            q2f3_ext = float("nan")
-        else:
-            mse_ext = sum_squared_errors / n_ext if n_ext else float("nan")
-            denom_f3 = train_centered_sum / n_train if n_train else float("nan")
-            if (
-                not np.isfinite(mse_ext)
-                or not np.isfinite(denom_f3)
-                or denom_f3 <= 0
-            ):
-                q2f3_ext = float("nan")
-            else:
-                q2f3_ext = float(1.0 - (mse_ext / denom_f3))
-
-        return {
-            "R2_ext": q2_ext,
-            "RMSE_ext": float(np.sqrt(mean_squared_error(y_true, preds))),
-            "s_ext": _compute_standard_error(residuals, param_count),
-            "MAE_ext": float(mean_absolute_error(y_true, preds)),
-            "Q2F1_ext": _safe_q2(denom_f1),
-            "Q2F2_ext": q2_ext,
-            "Q2F3_ext": q2f3_ext,
-        }
+        return _compute_external_metrics(self.context, self.config, variables, ext_df)
 
 
 
@@ -16592,7 +17876,7 @@ class VisualizationTab(ttk.Frame):
 
     PLOT_TITLES = {
         "correlation_heatmap": "Correlation heatmap",
-        "correlation_heatmap_with_target": "Correlation heatmap (with dependent)",
+        "correlation_heatmap_with_target": "Correlation heatmap with dependent",
         "exp_vs_pred": "Predicted vs Actual",
         "exp_vs_pred_loo": "Predicted vs Actual by LOO",
         "exp_vs_resid": "Residuals vs Actual",
@@ -17626,6 +18910,19 @@ class VisualizationTab(ttk.Frame):
             self.dataset_choice_var.set(restored_label)
             if self.dataset_combo is not None:
                 self.dataset_combo.set(restored_label)
+        elif is_heatmap:
+            if self.dataset_choice_var.get() != training_label:
+                self.dataset_choice_var.set(training_label)
+                if self.dataset_combo is not None:
+                    self.dataset_combo.set(training_label)
+        else:
+            value_to_label = {value: label for label, value in self.FILTER_OPTIONS}
+            current_value = self.dataset_filter.get()
+            current_label = value_to_label.get(current_value)
+            if current_label and self.dataset_choice_var.get() != current_label:
+                self.dataset_choice_var.set(current_label)
+                if self.dataset_combo is not None:
+                    self.dataset_combo.set(current_label)
 
         if self.dataset_combo is not None:
             if restrict_dataset_to_training or not (available and not is_heatmap):
@@ -20764,34 +22061,109 @@ class VisualizationTab(ttk.Frame):
         try:
             current_dpi = float(self.figure.dpi)
             target_dpi = current_dpi if current_dpi >= 1000 else 1000
-            self.figure.savefig(path, bbox_inches="tight", dpi=target_dpi)
+            plot_key = self._get_selected_plot_key()
+            is_heatmap = plot_key is not None and self._is_heatmap_plot_key(plot_key)
+            output_path = Path(path)
+            if is_heatmap and output_path.suffix.lower() == ".pdf":
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".png",
+                    dir=str(output_path.parent),
+                )
+                temp_path = Path(temp_file.name)
+                temp_file.close()
+                try:
+                    self.figure.savefig(temp_path, bbox_inches="tight", dpi=300)
+                    _save_heatmap_pdf_from_png(
+                        temp_path,
+                        output_path,
+                        figsize=tuple(self.figure.get_size_inches()),
+                        dpi=300,
+                    )
+                finally:
+                    temp_path.unlink(missing_ok=True)
+            else:
+                self.figure.savefig(output_path, bbox_inches="tight", dpi=target_dpi)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Save plot", f"Could not save the plot: {exc}")
         else:
             messagebox.showinfo("Save plot", f"Plot saved to {path}")
 
 
+class _CLIVizMasterApp:
+    @staticmethod
+    def _format_numeric_value(value: object) -> str:
+        return MLRXApp._format_numeric_value(value)
+
+
+class _CLIVisualizationTab(VisualizationTab):
+    def _build_ui(self) -> None:
+        self.figure = Figure(figsize=(6.4, 6.4))
+        self.ax = self.figure.add_subplot(111)
+        self._primary_axes = self.ax
+        self._heatmap_ax = None
+        self._heatmap_colorbar = None
+        self._heatmap_cbar_ax = None
+        self._heatmap_label_ax = None
+        self._heatmap_active = False
+        self._primary_axes_default_bbox = self.ax.get_position().frozen()
+        self.plot_status_var = tk.StringVar(value="")
+        self._label_manager = None
+        self.plot_listbox = None
+        self.save_plot_button = None
+
+    def set_available(self, available: bool) -> None:
+        self.available = available
+
+
+def _sanitize_plot_label(label: str) -> str:
+    sanitized = label.replace(os.sep, "-")
+    if os.altsep:
+        sanitized = sanitized.replace(os.altsep, "-")
+    return sanitized
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     """Entry point for both the GUI and CLI modes."""
 
     args = list(sys.argv[1:] if argv is None else argv)
-    if args == ["--version"]:
-        print(f"MLR-X version {VERSION}")
-        return
-
     if not args:
         _start_background_imports()
         app = MLRXApp()
         app.mainloop()
         return
+    parser = argparse.ArgumentParser(description="Run MLR-X in CLI mode.")
+    parser.add_argument("config", nargs="?", help="Path to the configuration file.")
+    parser.add_argument("--model", type=int, help="Model identifier for requested outputs.")
+    parser.add_argument(
+        "--outputs",
+        nargs="+",
+        help="Outputs to generate: diagnostics, visualization, summary, pdf, png, tiff, svg, summary rc.",
+    )
+    parser.add_argument(
+        "--noruns",
+        action="store_true",
+        help="Use an existing results file from the configuration output path.",
+    )
+    parser.add_argument("--version", action="store_true", help="Show version and exit.")
+    parsed = parser.parse_args(args)
 
-    if len(args) > 1:
+    if parsed.version:
+        print(f"MLR-X version {VERSION}")
+        return
+
+    if not parsed.config:
         print("Usage: MLRX.py [config.conf]")
         sys.exit(1)
 
-    config_path = args[0]
     try:
-        run_cli(config_path)
+        output_spec = _parse_cli_outputs(parsed.outputs)
+        run_cli(
+            parsed.config,
+            output_spec=output_spec,
+            model_id=parsed.model,
+            noruns=parsed.noruns,
+        )
     except Exception as exc:  # noqa: BLE001
         message = str(exc)
         if message.startswith("Configuration not allowed:"):
