@@ -338,7 +338,7 @@ Because the computational cost increases exponentially with the number of predic
 
 % =========================================================
 \section{Command-line (CLI) usage}
-Available on Linux and on the macOS and Windows GUI+CLI packages to run the full pipeline without launching the GUI. Provide exactly one argument: the path to a configuration file.
+The CLI supports fully reproducible execution for referee review and audit workflows, allowing all calculations and deliverables to be generated from configuration files without using the GUI.
 \newpage
 \subsection{Invocation}
 \begin{lstlisting}[style=mlrx]
@@ -349,16 +349,43 @@ Available on Linux and on the macOS and Windows GUI+CLI packages to run the full
 # Windows GUI+CLI
 MLRX.exe config.conf or MLRX.exe path\to\config.conf
 \end{lstlisting}
-If additional arguments are supplied, the program shows the expected syntax and exits.
-Paths containing spaces must be quoted (for example, \path{./MLRX "path/with space/config.conf"}).
+You can optionally add \texttt{--model \# --outputs diagnostics visualization pdf summary} to export outputs for a specific model. In addition to PDF, visualization exports can also be generated in PNG, TIFF, or SVG formats as configured. If \texttt{--noruns} is also included, the CLI skips model recomputation and regenerates only the requested outputs from the existing results file.
 
 \subsection{Configuration file structure}
 A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
 \subsection{Execution and progress}
-The CLI prints \texttt{Loaded configuration from ...} before parsing so any parse-time warnings follow it. It then reports the dataset name, available predictors, selected search method, and—when using EPR-S—the active seed list, seed size, random state, and iteration budget. It validates parameter ranges, including manual iteration counts, split identifiers, and efficiency thresholds for the chosen search strategy. Inefficient or out-of-threshold configurations are reported as structured warnings (rather than hard errors), and runs continue with a \texttt{Press Ctrl+C to cancel analysis.} hint. A banner of asterisks frames the configuration summary, and if fewer than 1{,}000 seeds are used with the guardrail enabled, the CLI prints a low-seed warning noting potential performance impact. Live progress updates stream during model search or evaluation, as well as during VIF computations. Upon completion, the CLI summarizes the total models explored, those meeting the target-metric threshold, the filtered set retained after export limits, and the corresponding CPU times.
+At completion of each export block, the CLI reports:
+\begin{itemize}
+  \item \texttt{Diagnostics exported successfully.}
+  \item \texttt{Figures exported successfully.}
+  \item \texttt{Summary exported successfully.}
+\end{itemize}
+When \texttt{--noruns} is used, the final message is \texttt{Output export completed.}
 
-\subsection{Output}
-Results are exported to the specified CSV file using semicolon separation, with normalized variable names and training, internal, and external metrics. If no model satisfies the target metric cutoff, an empty CSV file is written. Any parsing or runtime errors are printed. The output path can be changed in the configuration file; by default, the CLI writes \texttt{models.csv} to the current working directory.
+\subsection{CLI output system}
+Requested outputs are passed through \texttt{--outputs <items>}.
+
+\paragraph{Diagnostics \textrightarrow{} Tables}
+The diagnostics export directory is now \texttt{Tables} (previously \texttt{diagnostics}). CSV files use the prefix \texttt{model\_\#\_} and include diagnostics, correlation, and correlation-with-dependent-variable tables:
+\begin{lstlisting}[style=mlrx]
+Tables/
+  model_1_diagnostics.csv
+  model_1_correlation.csv
+  model_1_correlation_wdv.csv
+\end{lstlisting}
+
+\paragraph{Visualization \textrightarrow{} Figures}
+The visualization export directory is now \texttt{Figures} (previously \texttt{visualization}). All available charts are exported automatically. Supported formats are PDF, PNG, TIFF, and SVG. File names use the prefix \texttt{model\_\#\_} with suffixes \texttt{\_train}, \texttt{\_test}, or \texttt{\_train\_test} (the combined suffix appears only when test data exists). Example files:
+\begin{lstlisting}[style=mlrx]
+model_1_predicted_vs_observed_train.pdf
+model_1_predicted_vs_observed_test.pdf
+model_1_y_randomization.pdf
+model_1_residuals_train.pdf
+\end{lstlisting}
+The following plots are always training-only (no \texttt{\_test} or \texttt{\_train\_test} variants): \texttt{correlation\_heatmap}, \texttt{correlation\_heatmap\_with\_target}, \texttt{cooks\_distance}, and \texttt{cooks\_distance\_loo}.
+
+\paragraph{Summary}
+Using \texttt{--outputs summary} creates \texttt{model\_\#\_summary.txt}. If \texttt{--outputs summary rc} is supplied, the export enables \emph{Use recommended covariance}.
 
 % =========================================================
 \section{Operational good practices}
@@ -617,21 +644,21 @@ Dataset path = data.csv
 2) ,
 3) \t
 4) |
-Selected option: 1
+Selected option = 1
 
 # Dependent variable options:
 1) Last column
 2) First column
 3) Second column
 4) Third column
-Selected option: 1
+Selected option = 1
 
 # Non-variable columns options:
 1) None
 2) First column
 3) First and second column
 4) First, second, and third column
-Selected option: 2
+Selected option = 2
 
 Exclude constant columns = false
 Constant threshold = 90.0
@@ -644,7 +671,7 @@ Data splitting
 1) None (use full dataset)
 2) Random
 3) Manual
-Selected option: 1
+Selected option = 1
 
 ---------
 Settings
@@ -652,14 +679,14 @@ Settings
 # Search method options:
 1) All subsets (traditional)
 2) EPR-S
-Selected option: 2
+Selected option = 1
 
 # Target metric options:
 1) R2
 2) adj-R2
 3) Q2 (LOO)
 4) RMSE (LOO)
-Selected option: 1
+Selected option = 1
 
 # Covariance type options:
 1) Non robust
@@ -667,7 +694,7 @@ Selected option: 1
 3) HC1
 4) HC2
 5) HC3
-Selected option: 1
+Selected option = 1
 
 Max predictors per model = 6
 Significance level = 0.05
@@ -681,18 +708,26 @@ CPU cores to use = 4
 Number of seeds = 1000
 Seed size = 3
 Random state = 42
-Allow fewer than 1000 seeds = deactivated
+Allow fewer than 1000 seeds = false
 
 # Iterations per seed mode options:
-1) auto
-2) manual (Max iterations per seed = none)
+1) Auto
+2) Manual (Max iterations per seed = none)
 3) Until converge
-Selected option: 1
+Selected option = 1
 
 # Prediction clipping
 Clip predictions = false
 Clip lower bound = none
 Clip upper bound = none
+
+# Internal and external validation:
+Validation = true
+LOO = true
+k-fold = true
+Folds = 10
+Repeats = 5
+External dataset path = ext_data.csv
 
 -------
 Output
