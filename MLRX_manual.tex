@@ -443,6 +443,17 @@ model_#_summary.txt
 
 If \texttt{--outputs summary rc} is specified, the export enables \emph{Use recommended covariance}.
 
+Linux example (model-specific exports):
+\begin{lstlisting}[style=mlrx]
+./MLRX config.conf --model 1 --outputs diagnostics visualization pdf summary
+\end{lstlisting}
+This command exports figures, tables, and the summary for model 1.
+
+If a models summary already exists, you can export figures, tables, and the summary for model 1 without re-running the analysis by adding \texttt{--noruns}:
+\begin{lstlisting}[style=mlrx]
+./MLRX config.conf --model 1 --outputs diagnostics visualization pdf summary --noruns
+\end{lstlisting}
+
 % =========================================================
 \section{Operational good practices}
 \begin{itemize}
