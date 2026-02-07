@@ -399,48 +399,6 @@ EPR-S seed definitions are specified inside the \texttt{Settings} block under a 
 Missing parameters automatically fall back to default values.  
 A complete annotated example is provided in Section~13.
 
-\subsection{Execution and progress reporting}
-
-At startup, the CLI prints:
-
-\begin{lstlisting}
-Loaded configuration from ...
-\end{lstlisting}
-
-It then reports:
-
-\begin{itemize}
-\item dataset name
-\item number of predictors
-\item selected search strategy
-\item (for EPR-S) seed list, seed size, random state, and iteration budget
-\end{itemize}
-
-All parameter ranges are validated before execution.  
-Out-of-threshold or inefficient configurations generate structured warnings rather than hard errors.
-
-During execution, live progress indicators are displayed for:
-
-\begin{itemize}
-\item model search or evaluation
-\item VIF computation
-\end{itemize}
-
-The process may be cancelled at any time with:
-
-\begin{lstlisting}
-Ctrl+C
-\end{lstlisting}
-
-After completion, the CLI summarizes:
-
-\begin{itemize}
-\item total models explored
-\item models meeting the target-metric threshold
-\item exported models after filtering limits
-\item CPU time statistics
-\end{itemize}
-
 \subsection{Output}
 
 Results are exported to a semicolon-separated CSV file containing normalized variable names and all training, internal, and external metrics.
