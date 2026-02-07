@@ -338,29 +338,124 @@ Because the computational cost increases exponentially with the number of predic
 
 % =========================================================
 \section{Command-line (CLI) usage}
-Available on Linux and on the macOS and Windows GUI+CLI packages to run the full pipeline without launching the GUI.
-\newpage
+
+The CLI is available on Linux and in the macOS and Windows GUI+CLI packages. 
+It enables execution of the complete MLR-X pipeline without launching the graphical interface and is recommended for automated, batch, or large-scale analyses.
+
 \subsection{Invocation}
+
 \begin{lstlisting}[style=mlrx]
 # Linux
-./MLRX config.conf or ./MLRX path/to/config.conf
+./MLRX config.conf
+./MLRX path/to/config.conf
+
 # macOS GUI+CLI
-./MLRX config.conf or ./MLRX path/to/config.conf
+./MLRX config.conf
+./MLRX path/to/config.conf
+
 # Windows GUI+CLI
-MLRX.exe config.conf or MLRX.exe path\to\config.conf
+MLRX.exe config.conf
+MLRX.exe path\to\config.conf
 \end{lstlisting}
-Paths containing spaces must be quoted (for example, \path{./MLRX "path/with space/config.conf"}).
-These command-line runs generate the models file in CSV format, which can then be loaded into the interface to produce tables and charts. This is the most recommended option because you can edit chart styles, label points, and work in a more user-friendly environment. You can optionally add \texttt{--model \# --outputs diagnostics visualization pdf summary} to export outputs for a specific model. In addition to PDF, visualization exports can also be generated in PNG, TIFF, or SVG formats as configured. If \texttt{--noruns} is also included, the CLI skips model recomputation and regenerates only the requested outputs from the existing results file.
 
-\subsection{Configuration file structure}
-A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
+If additional or invalid arguments are supplied, the program displays the expected syntax and exits.
+
+Paths containing spaces must be quoted, for example:
+\path{./MLRX "path/with space/config.conf"}.
+
+\subsection{Optional arguments}
+
+The CLI accepts optional flags to control export behavior:
+
+\begin{itemize}
+\item \texttt{--model \#} selects a specific model for post-processing.
+\item \texttt{--outputs <items>} exports selected outputs (diagnostics, visualization, pdf, summary).
+\item \texttt{--noruns} skips model recomputation and regenerates outputs from an existing results file.
+\end{itemize}
+
+Visualization exports support PDF, PNG, TIFF, and SVG formats according to the configuration settings.
+
+\subsection{Configuration file}
+
+Execution requires a plain-text configuration file organized into headed blocks:
+
+\begin{itemize}
+\item Dataset
+\item Data splitting
+\item Settings
+\item Output
+\end{itemize}
+
+Parameters are defined as key--value pairs.  
+List-type parameters are selected by index using the \texttt{selected option} field.
+
+EPR-S seed definitions are specified inside the \texttt{Settings} block under a dedicated seed subsection.
+
+Missing parameters automatically fall back to default values.  
+A complete annotated example is provided in Section~13.
+
+\subsection{Execution and progress reporting}
+
+At startup, the CLI prints:
+
+\begin{lstlisting}
+Loaded configuration from ...
+\end{lstlisting}
+
+It then reports:
+
+\begin{itemize}
+\item dataset name
+\item number of predictors
+\item selected search strategy
+\item (for EPR-S) seed list, seed size, random state, and iteration budget
+\end{itemize}
+
+All parameter ranges are validated before execution.  
+Out-of-threshold or inefficient configurations generate structured warnings rather than hard errors.
+
+During execution, live progress indicators are displayed for:
+
+\begin{itemize}
+\item model search or evaluation
+\item VIF computation
+\end{itemize}
+
+The process may be cancelled at any time with:
+
+\begin{lstlisting}
+Ctrl+C
+\end{lstlisting}
+
+After completion, the CLI summarizes:
+
+\begin{itemize}
+\item total models explored
+\item models meeting the target-metric threshold
+\item exported models after filtering limits
+\item CPU time statistics
+\end{itemize}
+
 \subsection{Output}
-Results are exported to the specified CSV file using semicolon separation, with normalized variable names and training, internal, and external metrics. If no model satisfies the target metric cutoff, an empty CSV file is written. Any parsing or runtime errors are printed. The output path can be changed in the configuration file; by default, the CLI writes \texttt{models.csv} to the current working directory.
-When \texttt{--noruns} is used, the final message is \texttt{Output export completed.}
-Requested outputs are passed through \texttt{--outputs <items>}.
 
-\paragraph{Diagnostics \textrightarrow{} Tables}
-The diagnostics export directory is \texttt{Tables}. CSV files use the prefix \texttt{model\_\#\_} and include diagnostics, correlation, and correlation-with-dependent-variable tables:
+Results are exported to a semicolon-separated CSV file containing normalized variable names and all training, internal, and external metrics.
+
+If no model satisfies the target metric cutoff, an empty CSV file is generated.
+
+By default, the file \texttt{models.csv} is written to the current working directory.  
+The destination path can be changed in the configuration file.
+
+When \texttt{--noruns} is used, only exports are generated and the final message is:
+
+\begin{lstlisting}
+Output export completed.
+\end{lstlisting}
+
+\subsection{Diagnostics --- Tables}
+
+Diagnostics tables are written to the \texttt{Tables/} directory.  
+Files use the prefix \texttt{model\_\#\_}:
+
 \begin{lstlisting}[style=mlrx]
 Tables/
   model_1_diagnostics.csv
@@ -368,18 +463,42 @@ Tables/
   model_1_correlation_wdv.csv
 \end{lstlisting}
 
-\paragraph{Visualization \textrightarrow{} Figures}
-The visualization export directory is \texttt{Figures}. All available charts are exported automatically. Supported formats are PDF, PNG, TIFF, and SVG. File names use the prefix \texttt{model\_\#\_} with suffixes \texttt{\_train}, \texttt{\_test}, or \texttt{\_train\_test} (the combined suffix appears only when test data exists). Example files:
+\subsection{Visualization --- Figures}
+
+Figures are exported to the \texttt{Figures/} directory.  
+All available charts are generated automatically.
+
 \begin{lstlisting}[style=mlrx]
 model_1_predicted_vs_observed_train.pdf
 model_1_predicted_vs_observed_test.pdf
 model_1_y_randomization.pdf
 model_1_residuals_train.pdf
 \end{lstlisting}
-The following plots are always training-only (no \texttt{\_test} or \texttt{\_train\_test} variants): \texttt{correlation\_heatmap}, \texttt{correlation\_heatmap\_with\_target}, \texttt{cooks\_distance}, and \texttt{cooks\_distance\_loo}.
 
-\paragraph{Summary}
-Using \texttt{--outputs summary} creates \texttt{model\_\#\_summary.txt}. If \texttt{--outputs summary rc} is supplied, the export enables \emph{Use recommended covariance}.
+The following plots are always training-only:
+
+\begin{itemize}
+\item correlation\_heatmap
+\item correlation\_heatmap\_with\_target
+\item cooks\_distance
+\item cooks\_distance\_loo
+\end{itemize}
+
+\subsection{Summary}
+
+Using:
+
+\begin{lstlisting}
+--outputs summary
+\end{lstlisting}
+
+creates:
+
+\begin{lstlisting}
+model_#_summary.txt
+\end{lstlisting}
+
+If \texttt{--outputs summary rc} is specified, the export enables \emph{Use recommended covariance}.
 
 % =========================================================
 \section{Operational good practices}
