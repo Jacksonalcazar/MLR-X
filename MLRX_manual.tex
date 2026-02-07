@@ -363,23 +363,6 @@ If additional or invalid arguments are supplied, the program displays the expect
 Paths containing spaces must be quoted, for example:
 \path{./MLRX "path/with space/config.conf"}.
 
-These command-line executions generate a models file in CSV format.  
-The file can be subsequently loaded into the graphical interface to produce tables, charts, and diagnostic reports.
-
-This workflow is recommended for most users, as the interface provides interactive visualization features, including chart customization, point labeling, and simplified data exploration.
-
-\subsection{Optional arguments}
-
-The CLI accepts optional flags to control export behavior:
-
-\begin{itemize}
-\item \texttt{--model \#} selects a specific model for post-processing.
-\item \texttt{--outputs <items>} exports selected outputs (diagnostics, visualization, pdf, summary).
-\item \texttt{--noruns} skips model recomputation and regenerates outputs from an existing results file.
-\end{itemize}
-
-Visualization exports support PDF, PNG, TIFF, and SVG formats according to the configuration settings.
-
 \subsection{Configuration file}
 
 Execution requires a plain-text configuration file organized into headed blocks:
@@ -398,6 +381,23 @@ EPR-S seed definitions are specified inside the \texttt{Settings} block under a 
 
 Missing parameters automatically fall back to default values.  
 A complete annotated example is provided in Section~13.
+
+These command-line executions generate a models file in CSV format.  
+The file can be subsequently loaded into the graphical interface to produce tables, charts, and diagnostic reports.
+
+This workflow is recommended for most users, as the interface provides interactive visualization features, including chart customization, point labeling, and simplified data exploration.
+
+\subsection{Optional arguments}
+
+The CLI accepts optional flags to control export behavior:
+
+\begin{itemize}
+\item \texttt{--model \#} selects a specific model for post-processing.
+\item \texttt{--outputs <items>} exports selected outputs (diagnostics, visualization, pdf, summary).
+\item \texttt{--noruns} skips model recomputation and regenerates outputs from an existing results file.
+\end{itemize}
+
+Visualization exports support PDF, PNG, TIFF, and SVG formats according to the configuration settings.
 
 \subsection{Output}
 
