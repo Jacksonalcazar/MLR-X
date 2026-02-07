@@ -354,16 +354,9 @@ These command-line runs generate the models file in CSV format, which can then b
 
 \subsection{Configuration file structure}
 A plain-text configuration file organized into headed blocks (Dataset, Data splitting, Settings, and Output) with parameters specified as key--value pairs. EPR-S seed entries appear inside the Settings block under a dedicated seed subheading. For list-type parameters, options are selected by index using the \texttt{selected option} field within the corresponding block. When loading configuration or results metadata, missing entries fall back to defaults. Section~13 provides a complete, annotated example of a configuration file.
-\subsection{Execution and progress}
-At completion of each export block, the CLI reports:
-\begin{itemize}
-  \item \texttt{Diagnostics exported successfully.}
-  \item \texttt{Figures exported successfully.}
-  \item \texttt{Summary exported successfully.}
-\end{itemize}
+\subsection{Output}
+Results are exported to the specified CSV file using semicolon separation, with normalized variable names and training, internal, and external metrics. If no model satisfies the target metric cutoff, an empty CSV file is written. Any parsing or runtime errors are printed. The output path can be changed in the configuration file; by default, the CLI writes \texttt{models.csv} to the current working directory.
 When \texttt{--noruns} is used, the final message is \texttt{Output export completed.}
-
-\subsection{CLI output system}
 Requested outputs are passed through \texttt{--outputs <items>}.
 
 \paragraph{Diagnostics \textrightarrow{} Tables}
