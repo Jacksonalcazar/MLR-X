@@ -360,7 +360,7 @@ When \texttt{--noruns} is used, the final message is \texttt{Output export compl
 Requested outputs are passed through \texttt{--outputs <items>}.
 
 \paragraph{Diagnostics \textrightarrow{} Tables}
-The diagnostics export directory is now \texttt{Tables} (previously \texttt{diagnostics}). CSV files use the prefix \texttt{model\_\#\_} and include diagnostics, correlation, and correlation-with-dependent-variable tables:
+The diagnostics export directory is \texttt{Tables}. CSV files use the prefix \texttt{model\_\#\_} and include diagnostics, correlation, and correlation-with-dependent-variable tables:
 \begin{lstlisting}[style=mlrx]
 Tables/
   model_1_diagnostics.csv
@@ -369,7 +369,7 @@ Tables/
 \end{lstlisting}
 
 \paragraph{Visualization \textrightarrow{} Figures}
-The visualization export directory is now \texttt{Figures} (previously \texttt{visualization}). All available charts are exported automatically. Supported formats are PDF, PNG, TIFF, and SVG. File names use the prefix \texttt{model\_\#\_} with suffixes \texttt{\_train}, \texttt{\_test}, or \texttt{\_train\_test} (the combined suffix appears only when test data exists). Example files:
+The visualization export directory is \texttt{Figures}. All available charts are exported automatically. Supported formats are PDF, PNG, TIFF, and SVG. File names use the prefix \texttt{model\_\#\_} with suffixes \texttt{\_train}, \texttt{\_test}, or \texttt{\_train\_test} (the combined suffix appears only when test data exists). Example files:
 \begin{lstlisting}[style=mlrx]
 model_1_predicted_vs_observed_train.pdf
 model_1_predicted_vs_observed_test.pdf
