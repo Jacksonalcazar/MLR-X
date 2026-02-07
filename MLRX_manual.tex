@@ -349,6 +349,7 @@ Available on Linux and on the macOS and Windows GUI+CLI packages to run the full
 # Windows GUI+CLI
 MLRX.exe config.conf or MLRX.exe path\to\config.conf
 \end{lstlisting}
+Paths containing spaces must be quoted (for example, \path{./MLRX "path/with space/config.conf"}).
 You can optionally add \texttt{--model \# --outputs diagnostics visualization pdf summary} to export outputs for a specific model. In addition to PDF, visualization exports can also be generated in PNG, TIFF, or SVG formats as configured. If \texttt{--noruns} is also included, the CLI skips model recomputation and regenerates only the requested outputs from the existing results file.
 
 \subsection{Configuration file structure}
