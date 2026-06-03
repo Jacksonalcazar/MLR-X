@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thank you for your donation — MLR-X</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 20% 20%, rgba(0, 200, 150, 0.18), transparent 40%),
+                  radial-gradient(circle at 80% 10%, rgba(77, 208, 255, 0.2), transparent 42%),
+                  linear-gradient(135deg, #0c1f30, #0b1426);
+      color: #eaf2ff;
+    }
+    .card {
+      max-width: 640px;
+      width: min(90vw, 640px);
+      padding: 2.75rem;
+      border-radius: 18px;
+      background: rgba(14, 27, 46, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(10px);
+      text-align: center;
+    }
+    h1 { margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+    p { color: #c6d8f5; line-height: 1.7; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.5rem 0.85rem;
+      background: rgba(0, 200, 150, 0.16);
+      color: #7af3d4;
+      border-radius: 999px;
+      font-weight: 700;
+      margin-bottom: 1.2rem;
+    }
+    .actions { margin-top: 1.6rem; display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center; }
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.9rem 1.3rem;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 700;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+    .primary { background: linear-gradient(135deg, #00c896, #4dd0ff); color: #0b1524; box-shadow: 0 12px 36px rgba(0, 200, 150, 0.35); }
+    .secondary { background: rgba(255, 255, 255, 0.08); color: #eaf2ff; }
+    a.button:hover { transform: translateY(-1px); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge">🎉 Donation received</div>
+    <h1>Thank you for supporting MLR-X</h1>
+    <p>Your generosity helps keep the software maintained, tested, and accessible to the community. We appreciate your commitment to open, reproducible regression tools.</p>
+    <div class="actions">
+      <a class="button primary" href="https://jacksonalcazar.github.io/MLR-X">Return to MLR-X home</a>
+      <a class="button secondary" href="https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG">Make another donation</a>
+    </div>
+  </main>
+</body>
+</html>
