@@ -582,6 +582,10 @@ class AnalysisCancelled(Exception):
     """Raised when the user stops the EPRS-S analysis."""
 
 
+class LOOSingularDesignError(ValueError):
+    """Raised when a model cannot be evaluated reliably with LOO."""
+
+
 class EventLike(Protocol):
     """Minimal interface shared by event objects."""
 
@@ -1588,7 +1592,7 @@ def write_configuration_file(
         random_state_value: object = (
             "default" if int(config.random_state) == 42 else config.random_state
         )
-        lines.append("# Seed settings for EPR-S")
+        lines.append("# Seed settings for EPR-C3")
         lines.append(_format_field_line("n_seeds", config.n_seeds))
         lines.append(_format_field_line("seed_size", seed_size_value))
         lines.append(_format_field_line("random_state", random_state_value))
@@ -1939,7 +1943,7 @@ def parse_configuration_file(
         if cli_mode and missing_seed_settings:
             joined_settings = ", ".join(f"'{name}'" for name in missing_seed_settings)
             print(
-                "Warning: Missing seed setting for EPR-S method: "
+                "Warning: Missing seed setting for EPR-C3 method: "
                 f"{joined_settings}. The default configuration will be used."
             )
             if _display_config_field("n_seeds") in missing_seed_settings:
@@ -2167,6 +2171,7 @@ def _apply_validation_to_export_df(
     if run_internal and use_loo:
         total_models = len(model_entries)
         completed_models = 0
+        singular_loo_models = 0
         last_progress_text = _print_progress("Running LOO analysis", 0, total_models, None)
         for idx, row, variables in model_entries:
             if not variables:
@@ -2185,6 +2190,11 @@ def _apply_validation_to_export_df(
                 metrics = _evaluate_model_loo(context, variables, config.clip_predictions)
                 for key, value in metrics.items():
                     export_df.at[idx, key] = value
+            except LOOSingularDesignError:
+                # Match the model-search behaviour used when a LOO metric is
+                # the target: a singular candidate is simply not eligible for
+                # LOO, while validation of the remaining models continues.
+                singular_loo_models += 1
             except Exception as exc:  # noqa: BLE001
                 print(f"Warning: LOO validation failed for model {row.get('Model')}: {exc}")
             completed_models += 1
@@ -2192,6 +2202,11 @@ def _apply_validation_to_export_df(
                 "Running LOO analysis", completed_models, total_models, last_progress_text
             )
         _finish_progress(last_progress_text)
+        if singular_loo_models:
+            print(
+                f"Skipped {singular_loo_models} model(s) in LOO validation because "
+                "their design matrix becomes singular."
+            )
 
     if run_internal and run_kfold and folds is not None and repeats is not None:
         valid_model_count = sum(1 for _, _, variables in model_entries if variables)
@@ -2991,9 +3006,9 @@ def _plot_scatter_cli(
     x_values = filtered[x_column].astype(float).to_numpy()
     y_values = filtered[y_column].astype(float).to_numpy()
     if include_identity and x_values.size and y_values.size:
-        min_val = float(np.min([np.min(x_values), np.min(y_values)]))
-        max_val = float(np.max([np.max(x_values), np.max(y_values)]))
-        ax.plot([min_val, max_val], [min_val, max_val], color="black", linestyle="--", linewidth=1)
+        ax.axline(
+            (0.0, 0.0), slope=1.0, color="black", linestyle="--", linewidth=1
+        )
 
     if include_zero_line:
         if zero_line_axis == "x":
@@ -3026,9 +3041,9 @@ def _plot_qq_cli(ax: Axes, df: pd.DataFrame, column: str, ylabel: str) -> None:
         color = VisualizationTab.COLOR_MAP.get(dataset, "#333333")
         ax.scatter(theoretical, residuals_sorted, label=dataset, s=50.0, alpha=0.8, color=color, edgecolors="black", linewidths=1.0)
 
-    min_val = min(ax.get_xlim()[0], ax.get_ylim()[0])
-    max_val = max(ax.get_xlim()[1], ax.get_ylim()[1])
-    ax.plot([min_val, max_val], [min_val, max_val], color="black", linestyle="--", linewidth=1)
+    ax.axline(
+        (0.0, 0.0), slope=1.0, color="black", linestyle="--", linewidth=1
+    )
     ax.legend()
 
 
@@ -3626,14 +3641,14 @@ def run_cli(config_path: Union[str, Path], *, output_spec: Optional[CLIOutputSpe
     warnings: list[str] = []
     if config.method == "eprs" and total_combos <= threshold:
         warnings.append(
-            "Warning: The current configuration is outside the recommended EPR-S "
+            "Warning: The current configuration is outside the recommended EPR-C3 "
             "thresholds. The analysis will proceed, but it is recommended to use the "
             "'All subsets' method for improved efficiency."
         )
     if config.method == "all_subsets" and total_combos > threshold:
         warnings.append(
             "Warning: This configuration may require substantial computation time. "
-            "It is recommended to switch to the EPR-S method for better efficiency."
+            "It is recommended to switch to the EPR-C3 method for better efficiency."
         )
     if config.allow_small_seed_count and config.n_seeds < MIN_SEEDS:
         warnings.append(
@@ -5297,7 +5312,13 @@ def _base_compute_metrics(
     }
 
     if config.target_metric in LOO_TARGET_METRICS:
-        loo_metrics = _evaluate_model_loo(context, vars_, config.clip_predictions)
+        try:
+            loo_metrics = _evaluate_model_loo(context, vars_, config.clip_predictions)
+        except LOOSingularDesignError:
+            # A singular candidate is not a valid regression model.  During a
+            # model search, discard only that candidate instead of aborting the
+            # complete analysis.
+            return None
         if not np.isfinite(loo_metrics.get("Q2_loo", float("nan"))):
             return None
         metrics.update(loo_metrics)
@@ -5311,23 +5332,32 @@ def _evaluate_model_loo(
     X = take(context, variables)
     y = context.y_np.astype(float)
     n_samples = y.shape[0]
-    if n_samples <= X.shape[1]:
-        raise ValueError("LOO: samples must exceed the number of variables.")
+    if n_samples <= X.shape[1] + 1:
+        raise LOOSingularDesignError(
+            "LOO: samples must exceed the number of fitted parameters "
+            "(predictors plus intercept)."
+        )
 
     design = np.c_[np.ones(n_samples), X]
-    xtx = design.T @ design
     try:
-        xtx_inv = np.linalg.inv(xtx)
+        coefficients, _, rank, _ = np.linalg.lstsq(design, y, rcond=None)
+        design_pinv = np.linalg.pinv(design)
     except np.linalg.LinAlgError:
-        raise ValueError("LOO: design matrix is singular.") from None
+        raise LOOSingularDesignError("LOO: design matrix is singular.") from None
+    if rank < design.shape[1]:
+        raise LOOSingularDesignError("LOO: design matrix is singular.")
 
-    xty = design.T @ y
-    coefficients = xtx_inv @ xty
     fitted = design @ coefficients
     residuals = y - fitted
-    hat_diag = np.sum(design * (design @ xtx_inv), axis=1)
+    hat_diag = np.sum(design * design_pinv.T, axis=1)
+    denominator = 1.0 - hat_diag
+    leverage_tolerance = np.finfo(float).eps * max(design.shape) * 10
+    if np.any(np.abs(denominator) <= leverage_tolerance):
+        raise LOOSingularDesignError(
+            "LOO: a leave-one-out fit is singular because an observation has unit leverage."
+        )
     with np.errstate(divide="ignore", invalid="ignore"):
-        loo_pred = y - residuals / (1 - hat_diag)
+        loo_pred = y - residuals / denominator
     if clip_predictions is not None:
         lo, hi = clip_predictions
         loo_pred = np.clip(loo_pred, lo, hi)
@@ -9130,7 +9160,7 @@ class MLRXApp(tk.Tk):
         elif notice_key == "suggest_eprs":
             messagebox.showinfo(
                 "Search method guidance",
-                "For the selected maximum number of predictors, it is more efficient to use the EPR-S method.",
+                "For the selected maximum number of predictors, it is more efficient to use the EPR-C3 method.",
             )
 
     def _set_seeds_to_predictors(self):
@@ -9289,7 +9319,12 @@ class MLRXApp(tk.Tk):
             self.observation_cache.clear()
             self.correlation_cache.clear()
 
-            self._prepare_context_for_loaded_results(allow_prompt=True)
+            context_ready = self._prepare_context_for_loaded_results(allow_prompt=True)
+            # Resolve the training dataset first.  Only after that modal workflow has
+            # closed do we offer to relocate a missing external test dataset, so the
+            # two prompts can never be displayed at the same time.
+            if context_ready:
+                self._prompt_for_missing_external_test_dataset()
             self.summary_tab.update_context(self.last_context, self.last_config)
 
             self._suspend_analysis_tab_state_updates += 1
@@ -9594,6 +9629,7 @@ class MLRXApp(tk.Tk):
                 answer = messagebox.askyesno(
                     "Dataset required",
                     f"{message}\n\nWould you like to locate the dataset now?",
+                    parent=self,
                 )
                 if answer:
                     while True:
@@ -9618,11 +9654,13 @@ class MLRXApp(tk.Tk):
                             "Dataset required",
                             "The selected dataset could not be loaded. "
                             "Please choose a valid dataset file.",
+                            parent=self,
                         )
                         if not retry:
                             messagebox.showerror(
                                 "Dataset required",
                                 "Diagnostics and visualization remain unavailable.",
+                                parent=self,
                             )
                             return False
             else:
@@ -9631,6 +9669,7 @@ class MLRXApp(tk.Tk):
                     messagebox.showerror(
                         "Dataset required",
                         f"{message}\nDiagnostics and visualization will remain unavailable.{detail}",
+                        parent=self,
                     )
             return False
 
@@ -9644,6 +9683,54 @@ class MLRXApp(tk.Tk):
         if (not self.holdout_ready) and self.external_test_path.get().strip():
             self.ensure_holdout_data_available(show_alert=False)
         return True
+
+    def _prompt_for_missing_external_test_dataset(self) -> bool:
+        """Offer to relocate a test dataset referenced by loaded model metadata."""
+        configured_path = self.external_test_path.get().strip()
+        if not configured_path or Path(configured_path).is_file():
+            return True
+
+        message = "The test dataset referenced by the loaded results could not be opened."
+        answer = messagebox.askyesno(
+            "Test dataset required",
+            f"{message}\n\nWould you like to locate the test dataset now?",
+            parent=self,
+        )
+        if not answer:
+            self._set_holdout_ready(False)
+            return False
+
+        while True:
+            new_path = filedialog.askopenfilename(
+                title="Select test dataset",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+                parent=self,
+            )
+            if not new_path:
+                self._set_holdout_ready(False)
+                return False
+
+            self.external_test_path.set(new_path)
+            if self.ensure_holdout_data_available(show_alert=False):
+                self._append_log(
+                    "Test dataset context restored using the selected file.\n"
+                )
+                return True
+
+            retry = messagebox.askretrycancel(
+                "Test dataset required",
+                "The selected test dataset could not be loaded. "
+                "Please choose a valid dataset file.",
+                parent=self,
+            )
+            if not retry:
+                messagebox.showerror(
+                    "Test dataset required",
+                    "Test-set diagnostics and visualization remain unavailable.",
+                    parent=self,
+                )
+                self._set_holdout_ready(False)
+                return False
 
     def _clear_results_view(self):
         self._clear_selected_model_push(refresh_tables=False)
@@ -11562,7 +11649,7 @@ class MLRXApp(tk.Tk):
 
         if config.method == "eprs" and total_combos <= threshold:
             proceed = self._show_configuration_warning(
-                "The current configuration is outside the recommended EPR-S thresholds. "
+                "The current configuration is outside the recommended EPR-C3 thresholds. "
                 "The analysis will proceed, but it is recommended to use the 'All subsets' "
                 "method for improved efficiency."
             )
@@ -11574,7 +11661,7 @@ class MLRXApp(tk.Tk):
         if config.method == "all_subsets" and total_combos > threshold:
             proceed = self._show_configuration_warning(
                 "This configuration may require substantial computation time. "
-                "It is recommended to switch to the EPR-S method for better efficiency."
+                "It is recommended to switch to the EPR-C3 method for better efficiency."
             )
             if not proceed:
                 self.status_var.set("Ready")
@@ -12154,12 +12241,16 @@ class MLRXApp(tk.Tk):
 
     @staticmethod
     def _stylize_active_sort_heading(label: str) -> str:
+        text = str(label)
+        if not sys.platform.startswith("win"):
+            return text
+
         bold_map = {
             **{chr(ord("A") + i): chr(0x1D5D4 + i) for i in range(26)},
             **{chr(ord("a") + i): chr(0x1D5EE + i) for i in range(26)},
             **{chr(ord("0") + i): chr(0x1D7EC + i) for i in range(10)},
         }
-        return "".join(bold_map.get(char, char) for char in str(label))
+        return "".join(bold_map.get(char, char) for char in text)
 
     def _format_sort_heading(self, label: str, active_metric: str, column: str) -> str:
         text = str(label)
@@ -12170,10 +12261,18 @@ class MLRXApp(tk.Tk):
     def _refresh_models_tab_sort_headings(self) -> None:
         style = ttk.Style()
         try:
+            if not hasattr(self, "_models_heading_font"):
+                self._models_heading_font = tkfont.nametofont("TkHeadingFont").copy()
+                self._models_heading_bold_font = self._models_heading_font.copy()
+                self._models_heading_bold_font.configure(weight="bold")
             style.map(
                 "Treeview.Heading",
                 relief=[("selected", "solid"), ("!selected", "raised")],
                 borderwidth=[("selected", 2), ("!selected", 1)],
+                font=[
+                    ("selected", str(self._models_heading_bold_font)),
+                    ("!selected", str(self._models_heading_font)),
+                ],
             )
         except Exception:
             pass
@@ -12266,6 +12365,7 @@ class MLRXApp(tk.Tk):
                 self._render_training_tree(sorted_df)
                 if hasattr(self, "summary_tab"):
                     self.summary_tab.update_training_results(sorted_df)
+            widget.yview_moveto(0.0)
             self._refresh_models_tab_sort_headings()
             return True
 
@@ -12277,6 +12377,7 @@ class MLRXApp(tk.Tk):
                 self._render_internal_tree(sorted_internal)
                 if hasattr(self, "summary_tab"):
                     self.summary_tab.update_internal_results(sorted_internal)
+            widget.yview_moveto(0.0)
             self._refresh_models_tab_sort_headings()
             return True
 
@@ -12288,6 +12389,7 @@ class MLRXApp(tk.Tk):
                 self._render_external_tree(sorted_external)
                 if hasattr(self, "summary_tab"):
                     self.summary_tab.update_external_results(sorted_external)
+            widget.yview_moveto(0.0)
             self._refresh_models_tab_sort_headings()
             return True
 
@@ -12331,7 +12433,18 @@ class MLRXApp(tk.Tk):
         self.selected_model_id = int(model_id)
         self._set_shared_model_selection(str(int(model_id)))
         self._resort_results_tables()
+        self._scroll_models_tables_to_top()
         self._refresh_models_tab_sort_headings()
+
+    def _scroll_models_tables_to_top(self) -> None:
+        for tree_name in (
+            "training_tree",
+            "internal_results_tree",
+            "external_results_tree",
+        ):
+            tree = getattr(self, tree_name, None)
+            if tree is not None:
+                tree.yview_moveto(0.0)
 
     def _clear_selected_model_push(self, *, refresh_tables: bool = True) -> None:
         self.selected_model_id = None
@@ -12697,7 +12810,9 @@ class MLRXApp(tk.Tk):
         if sort_column not in allowed:
             sort_column = self._default_training_sort_metric()
         self.training_sort_metric = sort_column
-        ascending = sort_column in {"RMSE", "MAE", "s", "Size", "VIF_max", "VIF_avg"}
+        ascending = sort_column in {
+            "Model", "RMSE", "MAE", "s", "Size", "VIF_max", "VIF_avg"
+        }
 
         sorted_df = df.copy()
         if sort_column == "Size" and sort_column not in sorted_df.columns:
@@ -14600,6 +14715,12 @@ class ValidationTab(ttk.Frame):
                             try:
                                 result_row.update(self._evaluate_model_loo(variables))
                                 item["method_success"] = True
+                            except LOOSingularDesignError:
+                                # Singular models are ineligible for LOO, just
+                                # as they are when a LOO metric drives the
+                                # model search.  Other requested validation
+                                # methods can still be evaluated for the model.
+                                pass
                             except Exception as exc:  # noqa: BLE001
                                 errors.append(f"Model {model_id} (LOO): {exc}")
                         method_done["LOO"] += 1
@@ -17741,6 +17862,17 @@ class SummaryTab(ttk.Frame):
             test_diag = test_diag[test_diag["Set"].astype(str).eq("Test")]
         else:
             test_diag = test_diag.iloc[0:0]
+        empty_test_values = pd.Series(np.nan, index=test_diag.index, dtype=float)
+        test_observed = pd.to_numeric(
+            test_diag.get("Observed", empty_test_values), errors="coerce"
+        )
+        test_predicted = pd.to_numeric(
+            test_diag.get("Predicted", empty_test_values), errors="coerce"
+        )
+        has_valid_test_data = bool(
+            not test_diag.empty
+            and (test_observed.notna() & test_predicted.notna()).any()
+        )
 
         n_train = int(len(train_diag.index))
         if n_train <= 0:
@@ -17843,7 +17975,7 @@ class SummaryTab(ttk.Frame):
         max_mahalanobis_test = float(mahal_test.max()) if mahal_test.size else float("nan")
 
         ad_regional_error_rows: list[tuple[str, Optional[tuple[int, float, float, str]]]] = []
-        if not test_diag.empty and p_count > 0:
+        if has_valid_test_data and p_count > 0:
             leverage_region_base = float(p_count + 1) / float(n_train)
             leverage_low_mask = leverage_test < leverage_region_base
             leverage_moderate_mask = (leverage_test >= leverage_region_base) & (leverage_test <= (3.0 * leverage_region_base))
@@ -17888,8 +18020,8 @@ class SummaryTab(ttk.Frame):
                 [iqr_region_by_obs.get(obs) == "extreme" for obs in test_diag_ids],
                 index=test_diag.index,
             )
-            observed_test = pd.to_numeric(test_diag.get("Observed"), errors="coerce")
-            predicted_test = pd.to_numeric(test_diag.get("Predicted"), errors="coerce")
+            observed_test = test_observed
+            predicted_test = test_predicted
             valid_ext_mask = observed_test.notna() & predicted_test.notna()
 
             def _regional_stats(mask: pd.Series) -> tuple[int, float]:
@@ -17975,7 +18107,7 @@ class SummaryTab(ttk.Frame):
             ]
 
         return {
-            "has_test_data": not test_diag.empty,
+            "has_test_data": has_valid_test_data,
             "h_star": h_star,
             "mahalanobis_threshold": mahalanobis_threshold,
             "cook_threshold": cook_threshold,
@@ -19789,48 +19921,47 @@ class SummaryTab(ttk.Frame):
                 return "-"
             return f"{value_f:.{digits}f}"
 
-        regional_rows = ad_summary.get("ad_regional_error_rows")
-        ad_regional_error_analysis_lines = [
-            "           ==============================================================",
-            "           =    TEST SET APPLICABILITY DOMAIN REGIONAL ERROR ANALYSIS   =",
-            "           ==============================================================",
-            "",
-            f"{'Region':<55}{'n':>5} {'Avg MAE*':^12} {'Mean h or D² value':^18} {'Range':^20}",
-        ]
-        if isinstance(regional_rows, list) and regional_rows:
-            group_started = False
-            for label, stats in regional_rows:
-                if stats is None:
-                    if group_started:
-                        ad_regional_error_analysis_lines.append("")
-                    ad_regional_error_analysis_lines.append(label)
-                    group_started = True
-                    continue
-                n_value, rmse_value, mean_range_value, range_value = stats
-                ad_regional_error_analysis_lines.append(
-                    f"{label:<55}{_fmt_regional_value(n_value):>5} "
-                    f"{_fmt_regional_value(rmse_value):^12} "
-                    f"{_fmt_regional_value(mean_range_value):^18} "
-                    f"{str(range_value):^20}"
-                )
-        else:
-            ad_regional_error_analysis_lines.append("No external data available to compute regional error analysis.")
-        ad_regional_error_analysis_lines.extend(
-            [
-                "-" * 110,
-                "* Average MAE on test set computed within the indicated regions.",
-                "** Defined as [Q1 - 1.5·IQR, Q1 - IQR) U (Q3 + IQR, Q3 + 1.5·IQR].",
-                "*** Defined as (-inf, Q1 - 1.5·IQR) U (Q3 + 1.5·IQR, +inf).",
+        if has_ad_test_data:
+            regional_rows = ad_summary.get("ad_regional_error_rows")
+            ad_regional_error_analysis_lines = [
+                "           ==============================================================",
+                "           =    TEST SET APPLICABILITY DOMAIN REGIONAL ERROR ANALYSIS   =",
+                "           ==============================================================",
+                "",
+                f"{'Region':<55}{'n':>5} {'Avg MAE*':^12} {'Mean h or D² value':^18} {'Range':^20}",
             ]
-        )
-        sections.append(
-            self._pad_block_to_width(
-                "\n".join(ad_regional_error_analysis_lines),
-                target_title_width,
-                align="left",
+            if isinstance(regional_rows, list) and regional_rows:
+                group_started = False
+                for label, stats in regional_rows:
+                    if stats is None:
+                        if group_started:
+                            ad_regional_error_analysis_lines.append("")
+                        ad_regional_error_analysis_lines.append(label)
+                        group_started = True
+                        continue
+                    n_value, rmse_value, mean_range_value, range_value = stats
+                    ad_regional_error_analysis_lines.append(
+                        f"{label:<55}{_fmt_regional_value(n_value):>5} "
+                        f"{_fmt_regional_value(rmse_value):^12} "
+                        f"{_fmt_regional_value(mean_range_value):^18} "
+                        f"{str(range_value):^20}"
+                    )
+            ad_regional_error_analysis_lines.extend(
+                [
+                    "-" * 110,
+                    "* Average MAE on test set computed within the indicated regions.",
+                    "** Defined as [Q1 - 1.5·IQR, Q1 - IQR) U (Q3 + IQR, Q3 + 1.5·IQR].",
+                    "*** Defined as (-inf, Q1 - 1.5·IQR) U (Q3 + 1.5·IQR, +inf).",
+                ]
             )
-        )
-        sections.append("")
+            sections.append(
+                self._pad_block_to_width(
+                    "\n".join(ad_regional_error_analysis_lines),
+                    target_title_width,
+                    align="left",
+                )
+            )
+            sections.append("")
 
         influential_title = self._pad_block_to_width(
             self._build_title_line(
@@ -28725,10 +28856,9 @@ class VisualizationTab(ttk.Frame):
                 update_y=update_y,
             )
             if x_limits is not None:
-                start, end = x_limits
-                ax.plot(
-                    [start, end],
-                    [start, end],
+                ax.axline(
+                    (0.0, 0.0),
+                    slope=1.0,
                     color="black",
                     linestyle="--",
                     linewidth=1,
@@ -29687,10 +29817,9 @@ class VisualizationTab(ttk.Frame):
             update_y=update_y,
         )
         if self.identity_var.get() and limits is not None:
-            start, end = limits
-            ax.plot(
-                [start, end],
-                [start, end],
+            ax.axline(
+                (0.0, 0.0),
+                slope=1.0,
                 color="black",
                 linestyle="--",
                 linewidth=1,
