@@ -2156,13 +2156,13 @@ def _apply_validation_to_export_df(
             sys.stdout.flush()
 
     def _has_loo_metrics(row: pd.Series) -> bool:
-        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_loo", "RMSE_loo", "s_loo", "MAE_loo"))
+        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_loo", "RMSE_loo", "s_loo", "CCC_loo", "MAE_loo"))
 
     def _has_kfold_metrics(row: pd.Series) -> bool:
-        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold"))
+        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold"))
 
     def _has_bootstrap_metrics(row: pd.Series) -> bool:
-        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_bs", "RMSE_bs", "s_bs", "MAE_bs"))
+        return all(MLRXApp._safe_float(row.get(key)) is not None for key in ("Q2_bs", "RMSE_bs", "s_bs", "CCC_bs", "MAE_bs"))
 
     if run_internal:
         print()
@@ -2380,14 +2380,17 @@ def export_results_to_csv_cli(
         "Q2_loo",
         "RMSE_loo",
         "s_loo",
+        "CCC_loo",
         "MAE_loo",
         "Q2_kfold",
         "RMSE_kfold",
         "s_kfold",
+        "CCC_kfold",
         "MAE_kfold",
         "Q2_bs",
         "RMSE_bs",
         "s_bs",
+        "CCC_bs",
         "MAE_bs",
         "Q2F1_ext",
         "Q2F2_ext",
@@ -2411,9 +2414,9 @@ def export_results_to_csv_cli(
             export_df[column] = pd.NA
 
     internal_groups = [
-        ["Q2_loo", "RMSE_loo", "s_loo", "MAE_loo"],
-        ["Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold"],
-        ["Q2_bs", "RMSE_bs", "s_bs", "MAE_bs"],
+        ["Q2_loo", "RMSE_loo", "s_loo", "CCC_loo", "MAE_loo"],
+        ["Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold"],
+        ["Q2_bs", "RMSE_bs", "s_bs", "CCC_bs", "MAE_bs"],
     ]
     for group in internal_groups:
         has_data = any(pd.to_numeric(export_df[col], errors="coerce").notna().any() for col in group)
@@ -2700,14 +2703,17 @@ def _read_results_file_cli(
             "Q2_loo": _metric_from_aliases("Q2_loo"),
             "RMSE_loo": _metric_from_aliases("RMSE_loo"),
             "s_loo": _metric_from_aliases("s_loo"),
+            "CCC_loo": _metric_from_aliases("CCC_loo"),
             "MAE_loo": _metric_from_aliases("MAE_loo"),
             "Q2_kfold": _metric_from_aliases("Q2_kfold"),
             "RMSE_kfold": _metric_from_aliases("RMSE_kfold"),
             "s_kfold": _metric_from_aliases("s_kfold"),
+            "CCC_kfold": _metric_from_aliases("CCC_kfold"),
             "MAE_kfold": _metric_from_aliases("MAE_kfold"),
             "Q2_bs": _metric_from_aliases("Q2_bs"),
             "RMSE_bs": _metric_from_aliases("RMSE_bs"),
             "s_bs": _metric_from_aliases("s_bs"),
+            "CCC_bs": _metric_from_aliases("CCC_bs"),
             "MAE_bs": _metric_from_aliases("MAE_bs"),
         }
         if all(value is None for value in metrics.values()):
@@ -5374,6 +5380,7 @@ def _evaluate_model_loo(
         "Q2_loo": r2,
         "RMSE_loo": rmse,
         "s_loo": _compute_standard_error(loo_residuals, param_count),
+        "CCC_loo": _compute_lin_ccc_value(y, loo_pred),
         "MAE_loo": mae,
     }
 
@@ -5399,8 +5406,10 @@ def _evaluate_model_kfold(
     sse_total = 0.0
     dof_total = 0.0
     s_values: list[float] = []
+    ccc_values: list[float] = []
     param_count = len(variables) + 1
     for _ in range(repeats):
+        repeat_predictions = np.full(y.shape, np.nan, dtype=float)
         indices = np.arange(X.shape[0])
         rng.shuffle(indices)
         fold_sizes = np.full(folds, X.shape[0] // folds, dtype=int)
@@ -5429,6 +5438,7 @@ def _evaluate_model_kfold(
                 lo, hi = clip_predictions
                 preds = np.clip(preds, lo, hi)
 
+            repeat_predictions[test_idx] = preds
             resid = y_test - preds
             metrics.append(
                 {
@@ -5445,6 +5455,7 @@ def _evaluate_model_kfold(
             s_values.append(_compute_standard_error(resid, param_count))
             if progress_callback is not None:
                 progress_callback()
+        ccc_values.append(_compute_lin_ccc_value(y, repeat_predictions))
 
     if not metrics:
         raise ValueError("k-fold: no evaluations were performed.")
@@ -5465,6 +5476,7 @@ def _evaluate_model_kfold(
         "Q2_kfold": float(np.mean(r2_values)),
         "RMSE_kfold": float(np.mean(rmse_values)),
         "s_kfold": s_kfold,
+        "CCC_kfold": float(np.nanmean(ccc_values)),
         "MAE_kfold": float(np.mean(mae_values)),
     }
 
@@ -5503,6 +5515,7 @@ def _evaluate_model_bootstrap(
 
     mse_632p_scores: list[float] = []
     mae_632p_scores: list[float] = []
+    ccc_632p_scores: list[float] = []
 
     attempts = 0
     max_attempts = max(resamples * 10, 2000)
@@ -5549,6 +5562,15 @@ def _evaluate_model_bootstrap(
 
         mse_632p_scores.append(_combine_632plus(err_resub_mse, err_oob_mse, gamma_mse))
         mae_632p_scores.append(_combine_632plus(err_resub_mae, err_oob_mae, gamma_mae))
+        ccc_resub = _compute_lin_ccc_value(y_train, pred_train)
+        ccc_oob = _compute_lin_ccc_value(y_oob, pred_oob)
+        # Apply the same .632+ weight used for the bootstrap errors.
+        denom = gamma_mse - err_resub_mse
+        relative_overfit = 1.0 if (not np.isfinite(denom) or denom <= 0) else float(
+            np.clip((err_oob_mse - err_resub_mse) / denom, 0.0, 1.0)
+        )
+        weight = float(0.632 / (1.0 - 0.368 * relative_overfit))
+        ccc_632p_scores.append(float((1.0 - weight) * ccc_resub + weight * ccc_oob))
         if progress_callback is not None:
             progress_callback()
 
@@ -5570,6 +5592,7 @@ def _evaluate_model_bootstrap(
         "Q2_bs": q2_value,
         "RMSE_bs": rmse_value,
         "s_bs": s_value,
+        "CCC_bs": float(np.nanmean(np.asarray(ccc_632p_scores, dtype=float))),
         "MAE_bs": mae_value,
     }
 
@@ -7877,7 +7900,7 @@ class MLRXApp(tk.Tk):
             "Q2",
             "RMSE",
             "MAE",
-            "s",
+            "CCC",
         )
         self.internal_results_columns_detailed = (
             "Model",
@@ -7886,15 +7909,15 @@ class MLRXApp(tk.Tk):
             "Q2_loo",
             "RMSE_loo",
             "MAE_loo",
-            "s_loo",
+            "CCC_loo",
             "Q2_kfold",
             "RMSE_kfold",
             "MAE_kfold",
-            "s_kfold",
+            "CCC_kfold",
             "Q2_bs",
             "RMSE_bs",
             "MAE_bs",
-            "s_bs",
+            "CCC_bs",
         )
         self.internal_results_columns = self.internal_results_columns_detailed
         self.internal_heading_map_simple = {
@@ -7903,22 +7926,22 @@ class MLRXApp(tk.Tk):
             "Q2": Q_SQUARED_SYMBOL,
             "RMSE": "RMSE",
             "MAE": "MAE",
-            "s": "s",
+            "CCC": "CCC",
         }
         self.internal_heading_map_detailed = {
             "Predictors": "Predictors",
             "Q2_loo": f"{Q_SQUARED_SYMBOL} (LOO)",
             "RMSE_loo": "RMSE (LOO)",
             "MAE_loo": "MAE (LOO)",
-            "s_loo": "s (LOO)",
+            "CCC_loo": "CCC (LOO)",
             "Q2_kfold": f"{Q_SQUARED_SYMBOL} (k-fold)",
             "RMSE_kfold": "RMSE (k-fold)",
             "MAE_kfold": "MAE (k-fold)",
-            "s_kfold": "s (k-fold)",
+            "CCC_kfold": "CCC (k-fold)",
             "Q2_bs": f"{Q_SQUARED_SYMBOL} (BS)",
             "RMSE_bs": "RMSE (BS)",
             "MAE_bs": "MAE (BS)",
-            "s_bs": "s (BS)",
+            "CCC_bs": "CCC (BS)",
             "Size": "Size",
         }
         self.internal_results_tree = ttk.Treeview(
@@ -7931,24 +7954,24 @@ class MLRXApp(tk.Tk):
             "Q2": {"anchor": "center", "min_width": 90, "weight": 0.0},
             "RMSE": {"anchor": "center", "min_width": 105, "weight": 0.0},
             "MAE": {"anchor": "center", "min_width": 105, "weight": 0.0},
-            "s": {"anchor": "center", "min_width": 80, "weight": 0.0},
+            "CCC": {"anchor": "center", "min_width": 90, "weight": 0.0},
         }
         self.internal_column_settings_detailed = {
             "Model": {"anchor": "center", "min_width": 70, "weight": 0.0},
             "Predictors": {"anchor": "w", "min_width": 300, "weight": 10.0},
             "Size": {"anchor": "center", "min_width": 80, "weight": 0.0},
-            "Q2_loo": {"anchor": "center", "min_width": 90, "weight": 0.0},
+            "Q2_loo": {"anchor": "center", "min_width": 80, "weight": 0.0},
             "RMSE_loo": {"anchor": "center", "min_width": 105, "weight": 0.0},
-            "MAE_loo": {"anchor": "center", "min_width": 105, "weight": 0.0},
-            "s_loo": {"anchor": "center", "min_width": 80, "weight": 0.0},
+            "MAE_loo": {"anchor": "center", "min_width": 90, "weight": 0.0},
+            "CCC_loo": {"anchor": "center", "min_width": 90, "weight": 0.0},
             "Q2_kfold": {"anchor": "center", "min_width": 105, "weight": 0.0},
             "RMSE_kfold": {"anchor": "center", "min_width": 115, "weight": 0.0},
             "MAE_kfold": {"anchor": "center", "min_width": 105, "weight": 0.0},
-            "s_kfold": {"anchor": "center", "min_width": 90, "weight": 0.0},
+            "CCC_kfold": {"anchor": "center", "min_width": 105, "weight": 0.0},
             "Q2_bs": {"anchor": "center", "min_width": 90, "weight": 0.0},
             "RMSE_bs": {"anchor": "center", "min_width": 105, "weight": 0.0},
             "MAE_bs": {"anchor": "center", "min_width": 105, "weight": 0.0},
-            "s_bs": {"anchor": "center", "min_width": 80, "weight": 0.0},
+            "CCC_bs": {"anchor": "center", "min_width": 80, "weight": 0.0},
         }
         # Keep initial Models-tab internal metrics headings in simple mode (no parentheses).
         self._configure_internal_results_tree(simple=True)
@@ -9410,7 +9433,7 @@ class MLRXApp(tk.Tk):
                 and kfold_repeats is not None
                 and any(
                     self._safe_float(row.get(key)) is not None
-                    for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold")
+                    for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold")
                 )
             ):
                 row["_kfold_folds"] = kfold_folds
@@ -9421,7 +9444,7 @@ class MLRXApp(tk.Tk):
                 and bootstrap_replicas is not None
                 and any(
                     self._safe_float(row.get(key)) is not None
-                    for key in ("Q2_bs", "RMSE_bs", "s_bs", "MAE_bs")
+                    for key in ("Q2_bs", "RMSE_bs", "s_bs", "CCC_bs", "MAE_bs")
                 )
             ):
                 row["_bootstrap_replicas"] = bootstrap_replicas
@@ -9558,8 +9581,12 @@ class MLRXApp(tk.Tk):
 
         if not required:
             self._load_training_results(base_df)
-            self.update_internal_results(self.full_internal_results, remember_source=False)
-            self.update_external_results(self.full_external_results, remember_source=False)
+            self.update_internal_results(
+                self.full_internal_results, remember_source=False, auto_export=False
+            )
+            self.update_external_results(
+                self.full_external_results, remember_source=False, auto_export=False
+            )
             self._close_filter_window()
             return
 
@@ -9581,8 +9608,12 @@ class MLRXApp(tk.Tk):
             return
 
         self._load_training_results(filtered_df)
-        self.update_internal_results(self.full_internal_results, remember_source=False)
-        self.update_external_results(self.full_external_results, remember_source=False)
+        self.update_internal_results(
+            self.full_internal_results, remember_source=False, auto_export=False
+        )
+        self.update_external_results(
+            self.full_external_results, remember_source=False, auto_export=False
+        )
         self._close_filter_window()
 
     def _close_filter_window(self) -> None:
@@ -10719,14 +10750,17 @@ class MLRXApp(tk.Tk):
                 "Q2_loo": self._safe_float(row.get("Q2_loo")),
                 "RMSE_loo": self._safe_float(row.get("RMSE_loo")),
                 "s_loo": self._safe_float(row.get("s_loo")),
+                "CCC_loo": self._safe_float(row.get("CCC_loo")),
                 "MAE_loo": self._safe_float(row.get("MAE_loo")),
                 "Q2_kfold": self._safe_float(row.get("Q2_kfold")),
                 "RMSE_kfold": self._safe_float(row.get("RMSE_kfold")),
                 "s_kfold": self._safe_float(row.get("s_kfold")),
+                "CCC_kfold": self._safe_float(row.get("CCC_kfold")),
                 "MAE_kfold": self._safe_float(row.get("MAE_kfold")),
                 "Q2_bs": self._safe_float(row.get("Q2_bs")),
                 "RMSE_bs": self._safe_float(row.get("RMSE_bs")),
                 "s_bs": self._safe_float(row.get("s_bs")),
+                "CCC_bs": self._safe_float(row.get("CCC_bs")),
                 "MAE_bs": self._safe_float(row.get("MAE_bs")),
             }
             if all(value is None for value in metrics.values()):
@@ -10924,7 +10958,32 @@ class MLRXApp(tk.Tk):
         self.split_mode.set(mode)
         self._update_split_controls()
 
+        # The external-test reader must follow the delimiter stored with the
+        # loaded results, rather than retaining the UI's default delimiter.
+        # Prefer an explicitly stored validation/external delimiter when present,
+        # then fall back to the dataset delimiter used by current result files.
+        validation_meta = metadata.get("validation")
+        delimiter_candidates: list[object] = []
+        if isinstance(validation_meta, dict):
+            delimiter_candidates.extend(
+                (
+                    validation_meta.get("external_delimiter"),
+                    validation_meta.get("delimiter"),
+                )
+            )
+        delimiter_candidates.append(metadata.get("validation_delimiter"))
+        if isinstance(split_meta, dict):
+            delimiter_candidates.append(split_meta.get("external_delimiter"))
+        delimiter_candidates.append(metadata.get("delimiter"))
+
         ext_delim_value = ""
+        for candidate in delimiter_candidates:
+            ext_delim_value = self._normalize_delimiter_value(candidate)
+            if ext_delim_value:
+                break
+        if ext_delim_value:
+            self.external_delimiter_var.set(self._delimiter_to_ui(ext_delim_value))
+
         if mode == "random":
             percent = None
             if isinstance(split_meta, dict):
@@ -11106,14 +11165,17 @@ class MLRXApp(tk.Tk):
                 "Q2_loo": self._safe_float(row.get("Q2_loo")),
                 "RMSE_loo": self._safe_float(row.get("RMSE_loo")),
                 "s_loo": self._safe_float(row.get("s_loo")),
+                "CCC_loo": self._safe_float(row.get("CCC_loo")),
                 "MAE_loo": self._safe_float(row.get("MAE_loo")),
                 "Q2_kfold": self._safe_float(row.get("Q2_kfold")),
                 "RMSE_kfold": self._safe_float(row.get("RMSE_kfold")),
                 "s_kfold": self._safe_float(row.get("s_kfold")),
+                "CCC_kfold": self._safe_float(row.get("CCC_kfold")),
                 "MAE_kfold": self._safe_float(row.get("MAE_kfold")),
                 "Q2_bs": self._safe_float(row.get("Q2_bs")),
                 "RMSE_bs": self._safe_float(row.get("RMSE_bs")),
                 "s_bs": self._safe_float(row.get("s_bs")),
+                "CCC_bs": self._safe_float(row.get("CCC_bs")),
                 "MAE_bs": self._safe_float(row.get("MAE_bs")),
                 "Q2F1_ext": self._safe_float(row.get("Q2F1_ext")),
                 "Q2F2_ext": self._safe_float(row.get("Q2F2_ext")),
@@ -11139,14 +11201,17 @@ class MLRXApp(tk.Tk):
                         "Q2_loo": self._safe_float(internal_row.get("Q2_loo")),
                         "RMSE_loo": self._safe_float(internal_row.get("RMSE_loo")),
                         "s_loo": self._safe_float(internal_row.get("s_loo")),
+                        "CCC_loo": self._safe_float(internal_row.get("CCC_loo")),
                         "MAE_loo": self._safe_float(internal_row.get("MAE_loo")),
                         "Q2_kfold": self._safe_float(internal_row.get("Q2_kfold")),
                         "RMSE_kfold": self._safe_float(internal_row.get("RMSE_kfold")),
                         "s_kfold": self._safe_float(internal_row.get("s_kfold")),
+                        "CCC_kfold": self._safe_float(internal_row.get("CCC_kfold")),
                         "MAE_kfold": self._safe_float(internal_row.get("MAE_kfold")),
                         "Q2_bs": self._safe_float(internal_row.get("Q2_bs")),
                         "RMSE_bs": self._safe_float(internal_row.get("RMSE_bs")),
                         "s_bs": self._safe_float(internal_row.get("s_bs")),
+                        "CCC_bs": self._safe_float(internal_row.get("CCC_bs")),
                         "MAE_bs": self._safe_float(internal_row.get("MAE_bs")),
                     }
                 )
@@ -11185,9 +11250,9 @@ class MLRXApp(tk.Tk):
                 export_df[column] = pd.NA
 
         internal_groups = [
-            ["Q2_loo", "RMSE_loo", "s_loo", "MAE_loo"],
-            ["Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold"],
-            ["Q2_bs", "RMSE_bs", "s_bs", "MAE_bs"],
+            ["Q2_loo", "RMSE_loo", "s_loo", "CCC_loo", "MAE_loo"],
+            ["Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold"],
+            ["Q2_bs", "RMSE_bs", "s_bs", "CCC_bs", "MAE_bs"],
         ]
         for group in internal_groups:
             has_data = any(
@@ -13112,12 +13177,12 @@ class MLRXApp(tk.Tk):
                 visible_detailed_columns.extend(["Predictors", "Size"])
 
             if show_loo:
-                visible_detailed_columns.extend(["Q2_loo", "RMSE_loo", "MAE_loo", "s_loo"])
+                visible_detailed_columns.extend(["Q2_loo", "RMSE_loo", "MAE_loo", "CCC_loo"])
             if show_kfold:
-                visible_detailed_columns.extend(["Q2_kfold", "RMSE_kfold", "MAE_kfold", "s_kfold"])
+                visible_detailed_columns.extend(["Q2_kfold", "RMSE_kfold", "MAE_kfold", "CCC_kfold"])
             if show_bootstrap:
                 visible_detailed_columns.extend(
-                    ["Q2_bs", "RMSE_bs", "MAE_bs", "s_bs"]
+                    ["Q2_bs", "RMSE_bs", "MAE_bs", "CCC_bs"]
                 )
             has_visible_method_columns = any((show_loo, show_kfold, show_bootstrap))
             if has_visible_method_columns:
@@ -13151,11 +13216,11 @@ class MLRXApp(tk.Tk):
                     "Q2_loo": fmt(row.get("Q2_loo")),
                     "RMSE_loo": fmt(row.get("RMSE_loo")),
                     "MAE_loo": fmt(row.get("MAE_loo")),
-                    "s_loo": fmt(row.get("s_loo")),
+                    "CCC_loo": fmt(row.get("CCC_loo")),
                     "Q2_kfold": fmt(row.get("Q2_kfold")),
                     "RMSE_kfold": fmt(row.get("RMSE_kfold")),
                     "MAE_kfold": fmt(row.get("MAE_kfold")),
-                    "s_kfold": fmt(row.get("s_kfold")),
+                    "CCC_kfold": fmt(row.get("CCC_kfold")),
                     "Q2_bs": fmt(
                         row.get("Q2_bs")
                     ),
@@ -13165,8 +13230,8 @@ class MLRXApp(tk.Tk):
                     "MAE_bs": fmt(
                         row.get("MAE_bs")
                     ),
-                    "s_bs": fmt(
-                        row.get("s_bs")
+                    "CCC_bs": fmt(
+                        row.get("CCC_bs")
                     ),
                 }
                 values = [row_values.get(col, "-") for col in self.internal_results_columns]
@@ -13174,22 +13239,22 @@ class MLRXApp(tk.Tk):
                 q2_candidates: list[Optional[float]] = []
                 rmse_candidates: list[Optional[float]] = []
                 mae_candidates: list[Optional[float]] = []
-                s_candidates: list[Optional[float]] = []
+                ccc_candidates: list[Optional[float]] = []
                 if not hide_loo:
                     q2_candidates.append(self._safe_float(row.get("Q2_loo")))
                     rmse_candidates.append(self._safe_float(row.get("RMSE_loo")))
                     mae_candidates.append(self._safe_float(row.get("MAE_loo")))
-                    s_candidates.append(self._safe_float(row.get("s_loo")))
+                    ccc_candidates.append(self._safe_float(row.get("CCC_loo")))
                 if not hide_kfold:
                     q2_candidates.append(self._safe_float(row.get("Q2_kfold")))
                     rmse_candidates.append(self._safe_float(row.get("RMSE_kfold")))
                     mae_candidates.append(self._safe_float(row.get("MAE_kfold")))
-                    s_candidates.append(self._safe_float(row.get("s_kfold")))
+                    ccc_candidates.append(self._safe_float(row.get("CCC_kfold")))
                 if not hide_bootstrap:
                     q2_candidates.append(self._safe_float(row.get("Q2_bs")))
                     rmse_candidates.append(self._safe_float(row.get("RMSE_bs")))
                     mae_candidates.append(self._safe_float(row.get("MAE_bs")))
-                    s_candidates.append(self._safe_float(row.get("s_bs")))
+                    ccc_candidates.append(self._safe_float(row.get("CCC_bs")))
 
                 def _avg(items: list[Optional[float]]) -> Optional[float]:
                     usable = [float(v) for v in items if v is not None and not pd.isna(v)]
@@ -13204,7 +13269,7 @@ class MLRXApp(tk.Tk):
                     "Q2": fmt(_avg(q2_candidates)),
                     "RMSE": fmt(_avg(rmse_candidates)),
                     "MAE": fmt(_avg(mae_candidates)),
-                    "s": fmt(_avg(s_candidates)),
+                    "CCC": fmt(_avg(ccc_candidates)),
                 }
                 values = [row_values_simple.get(col, "-") for col in self.internal_results_columns]
             rendered_values.append(values)
@@ -14609,14 +14674,14 @@ class ValidationTab(ttk.Frame):
             cancelled = False
 
             def _has_loo_metrics(row: dict[str, object]) -> bool:
-                keys = ("Q2_loo", "RMSE_loo", "s_loo", "MAE_loo")
+                keys = ("Q2_loo", "RMSE_loo", "s_loo", "CCC_loo", "MAE_loo")
                 return all(
                     key in row and self.master_app._safe_float(row.get(key)) is not None
                     for key in keys
                 )
 
             def _has_kfold_metrics(row: dict[str, object]) -> bool:
-                keys = ("Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold")
+                keys = ("Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold")
                 return all(
                     key in row and self.master_app._safe_float(row.get(key)) is not None
                     for key in keys
@@ -14629,6 +14694,7 @@ class ValidationTab(ttk.Frame):
                         row.get("Q2_bs"),
                         row.get("RMSE_bs"),
                         row.get("s_bs"),
+                        row.get("CCC_bs"),
                         row.get("MAE_bs"),
                     )
                 )
@@ -14671,12 +14737,12 @@ class ValidationTab(ttk.Frame):
                         result_row.update(existing_row)
 
                     if existing_row and use_kfold and not kfold_matches:
-                        for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "MAE_kfold"):
+                        for key in ("Q2_kfold", "RMSE_kfold", "s_kfold", "CCC_kfold", "MAE_kfold"):
                             result_row.pop(key, None)
                         result_row.pop("_kfold_folds", None)
                         result_row.pop("_kfold_repeats", None)
                     if existing_row and use_bootstrap and not bootstrap_matches:
-                        for key in ("Q2_bs", "RMSE_bs", "s_bs", "MAE_bs"):
+                        for key in ("Q2_bs", "RMSE_bs", "s_bs", "CCC_bs", "MAE_bs"):
                             result_row.pop(key, None)
                         result_row.pop("_bootstrap_replicas", None)
 
@@ -17129,14 +17195,17 @@ class SummaryTab(ttk.Frame):
         "RMSE_loo",
         "MAE_loo",
         "s_loo",
+        "CCC_loo",
         "Q2_kfold",
         "RMSE_kfold",
         "MAE_kfold",
         "s_kfold",
+        "CCC_kfold",
         "Q2_bs",
         "RMSE_bs",
         "MAE_bs",
         "s_bs",
+        "CCC_bs",
     )
 
     INTERNAL_LABELS: dict[str, str] = {
@@ -17144,14 +17213,17 @@ class SummaryTab(ttk.Frame):
         "RMSE_loo": "RMSE (LOO)",
         "MAE_loo": "MAE (LOO)",
         "s_loo": "s (LOO)",
+        "CCC_loo": "CCC (LOO)",
         "Q2_kfold": f"{Q_SQUARED_SYMBOL} (k-fold)",
         "RMSE_kfold": "RMSE (k-fold)",
         "MAE_kfold": "MAE (k-fold)",
         "s_kfold": "s (k-fold)",
+        "CCC_kfold": "CCC (k-fold)",
         "Q2_bs": f"{Q_SQUARED_SYMBOL} (BS)",
         "RMSE_bs": "RMSE (BS)",
         "MAE_bs": "MAE (BS)",
         "s_bs": "s (BS)",
+        "CCC_bs": "CCC (BS)",
     }
 
     EXTERNAL_ORDER: tuple[str, ...] = (
