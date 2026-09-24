@@ -123,6 +123,6 @@ Article under review. For now, please cite as follows:
 
 - Alcázar, Jackson J. (2026). "MLR-X 1.0 software. Available at: https://jacksonalcazar.github.io/MLR-X/".
 
-If you use the EPR-C3 method, please cite the method preprint:
+If you use the EPR-C3 method, please cite the published article:
 
-- Alcázar, Jackson J. (2026). EPR-C3: A deterministic constraint-aware heuristic for high-dimensional subset selection in multiple linear regression. Research Square. International Journal of Data Science and Analytics. https://doi.org/10.1007/s41060-026-01298-0
+- Alcázar, Jackson J. EPR-C3: A deterministic constraint-aware heuristic for high-dimensional subset selection in multiple linear regression. *Int J Data Sci Anal* **22**, 311 (2026). [https://doi.org/10.1007/s41060-026-01298-0](https://doi.org/10.1007/s41060-026-01298-0).
