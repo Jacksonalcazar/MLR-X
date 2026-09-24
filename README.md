@@ -122,3 +122,7 @@ The MLR-X name, logo, and visual identity are subject to trademark terms. See `T
 Article under review. For now, please cite as follows:
 
 - Alcázar, Jackson J. (2026). "MLR-X 1.0 software. Available at: https://jacksonalcazar.github.io/MLR-X/".
+
+If you use the EPR-C3 method, please cite the method preprint:
+
+- Alcázar, Jackson J. (2026). EPR-C3: A deterministic constraint-aware heuristic for high-dimensional subset selection in multiple linear regression. Research Square. International Journal of Data Science and Analytics. https://doi.org/10.1007/s41060-026-01298-0
