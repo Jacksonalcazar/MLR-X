@@ -187,13 +187,36 @@ BUG_REPORT_URL = "https://github.com/Jacksonalcazar/MLR-X/issues"
 PAYPAL_DONATION_URL = "https://www.paypal.com/donate/?hosted_button_id=TTWN9EKMWAHFG"
 
 CITATION_TEXT = (
-    "MLR-X 1.0 software. Available at: https://jacksonalcazar.github.io/MLR-X/"
+    "Alcázar, Jackson J. (2026). MLR-X 1.0 software. Available at: "
+    "https://jacksonalcazar.github.io/MLR-X/"
 )
-CITATION_BIB = """@software{alcazar_mlr_x_1_0,
+EPR_C3_CITATION_PROMPT = "If you use the EPR-C3 method, please cite:"
+EPR_C3_CITATION_TEXT = (
+    "Alcázar, Jackson J. EPR-C3: A deterministic constraint-aware heuristic for "
+    "high-dimensional subset selection in multiple linear regression. Int J Data "
+    "Sci Anal 22, 311 (2026). https://doi.org/10.1007/s41060-026-01298-0."
+)
+CITATION_BIB = """@software{alcazar2026mlrx,
   author = {Alcázar, Jackson J.},
   title = {{MLR-X 1.0 software. Available at: https://jacksonalcazar.github.io/MLR-X/}},
   year = {2026},
   version = {1.0},
+}
+"""
+
+EPR_C3_CITATION_BIB = """@article{alcazar2026eprc3,
+  author  = {Alcázar, Jackson J.},
+  title   = {{EPR-C3}: A deterministic constraint-aware heuristic for high-dimensional subset selection in multiple linear regression},
+  journal = {International Journal of Data Science and Analytics},
+  year    = {2026},
+  month   = sep,
+  day     = {24},
+  volume  = {22},
+  number  = {1},
+  pages   = {E311},
+  issn    = {2364-4168},
+  doi     = {10.1007/s41060-026-01298-0},
+  url     = {https://doi.org/10.1007/s41060-026-01298-0}
 }
 """
 
@@ -8215,7 +8238,6 @@ class MLRXApp(tk.Tk):
 
         content = ttk.Frame(window, padding=20)
         content.pack(fill="both", expand=True)
-        self._center_dialog(window)
         window.grab_set()
         window.focus_set()
 
@@ -8227,22 +8249,29 @@ class MLRXApp(tk.Tk):
         )
         message_label.pack(pady=(0, 15))
 
-        buttons = ttk.Frame(content)
-        buttons.pack(fill="x", pady=(0, 10))
+        self._add_citation_buttons(content, CITATION_TEXT, CITATION_BIB, "mlrx-citation.bib")
 
-        copy_btn = ttk.Button(
-            buttons,
-            text="Copy citation",
-            command=self._copy_citation_to_clipboard,
-        )
-        copy_btn.pack(side="left", expand=True, padx=(0, 5))
+        default_font = tkfont.nametofont("TkDefaultFont")
+        prompt_font = default_font.copy()
+        prompt_font.configure(weight="bold")
+        prompt_label = ttk.Label(content, text=EPR_C3_CITATION_PROMPT, font=prompt_font)
+        prompt_label.pack(pady=(10, 10))
+        prompt_label._citation_font = prompt_font
 
-        download_btn = ttk.Button(
-            buttons,
-            text="Download .bib",
-            command=self._download_citation_bib,
+        method_label = ttk.Label(
+            content,
+            text=EPR_C3_CITATION_TEXT,
+            justify="center",
+            wraplength=400,
         )
-        download_btn.pack(side="left", expand=True, padx=(5, 0))
+        method_label.pack(pady=(0, 15))
+
+        self._add_citation_buttons(
+            content,
+            EPR_C3_CITATION_TEXT,
+            EPR_C3_CITATION_BIB,
+            "epr-c3-citation.bib",
+        )
 
         def on_close() -> None:
             self._citation_window = None
@@ -8251,24 +8280,44 @@ class MLRXApp(tk.Tk):
         close_btn = ttk.Button(content, text="Close", command=on_close)
         close_btn.pack(pady=(5, 0))
 
+        self._center_dialog(window, vertical_offset=30)
         window.protocol("WM_DELETE_WINDOW", on_close)
         self._citation_window = window
 
-    def _copy_citation_to_clipboard(self) -> None:
+    def _add_citation_buttons(
+        self, parent: ttk.Frame, citation_text: str, citation_bib: str, filename: str
+    ) -> None:
+        buttons = ttk.Frame(parent)
+        buttons.pack(fill="x", pady=(0, 10))
+        ttk.Button(
+            buttons,
+            text="Copy citation",
+            command=lambda: self._copy_citation_to_clipboard(citation_text),
+        ).pack(side="left", expand=True, padx=(0, 5))
+        ttk.Button(
+            buttons,
+            text="Download .bib",
+            command=lambda: self._download_citation_bib(citation_bib, filename),
+        ).pack(side="left", expand=True, padx=(5, 0))
+
+    def _copy_citation_to_clipboard(self, citation_text: str) -> None:
         self.clipboard_clear()
-        self.clipboard_append(CITATION_TEXT)
+        self.clipboard_append(citation_text)
         self.update_idletasks()
         messagebox.showinfo("Copied", "Citation copied to clipboard.")
 
-    def _download_citation_bib(self) -> None:
+    def _download_citation_bib(self, citation_bib: str, filename: str) -> None:
         path = filedialog.asksaveasfilename(
-            title="Save citation", defaultextension=".bib", filetypes=(("BibTeX", "*.bib"),)
+            title="Save citation",
+            initialfile=filename,
+            defaultextension=".bib",
+            filetypes=(("BibTeX", "*.bib"),),
         )
         if not path:
             return
         try:
             with open(path, "w", encoding="utf-8") as handle:
-                handle.write(CITATION_BIB)
+                handle.write(citation_bib)
         except OSError as exc:
             messagebox.showerror("Error", f"Could not save file: {exc}")
             return
@@ -11475,18 +11524,26 @@ class MLRXApp(tk.Tk):
         )
         messagebox.showinfo("Dataset preview", info)
 
-    def _center_dialog(self, dialog: tk.Toplevel) -> None:
+    def _center_dialog(self, dialog: tk.Toplevel, vertical_offset: int = 0) -> None:
         dialog.update_idletasks()
         self.update_idletasks()
-        dlg_width = dialog.winfo_width() or dialog.winfo_reqwidth()
-        dlg_height = dialog.winfo_height() or dialog.winfo_reqheight()
+        dlg_width = dialog.winfo_reqwidth()
+        dlg_height = dialog.winfo_reqheight()
         parent_width = self.winfo_width() or self.winfo_reqwidth()
         parent_height = self.winfo_height() or self.winfo_reqheight()
         parent_root_x = self.winfo_rootx()
         parent_root_y = self.winfo_rooty()
         x = parent_root_x + max(0, int((parent_width - dlg_width) / 2))
-        y = parent_root_y + max(0, int((parent_height - dlg_height) / 2))
-        dialog.geometry(f"+{x}+{y}")
+        y = (
+            parent_root_y
+            + max(0, int((parent_height - dlg_height) / 2))
+            + vertical_offset
+        )
+        max_x = max(0, dialog.winfo_screenwidth() - dlg_width)
+        max_y = max(0, dialog.winfo_screenheight() - dlg_height)
+        bounded_x = min(max(x, 0), max_x)
+        bounded_y = min(max(y, 0), max_y)
+        dialog.geometry(f"{dlg_width}x{dlg_height}+{bounded_x}+{bounded_y}")
 
     def _show_configuration_warning(self, message: str) -> bool:
         dialog = tk.Toplevel(self)
