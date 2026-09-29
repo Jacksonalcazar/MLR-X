@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import argparse
@@ -149,7 +148,6 @@ def _background_imports() -> None:
         try:
             _load_heavy_module(module_name)
         except Exception:
-            # Errors are stored in the spec and will be re-raised on demand.
             pass
 
 
@@ -288,12 +286,10 @@ COVARIANCE_KEY_NORMALIZED: dict[str, str] = {
 
 COVARIANCE_DEFAULT_KEY = "nonrobust"
 
-# Iteration mode options
 ITERATION_MODE_AUTO = "auto"
 ITERATION_MODE_MANUAL = "manual"
 ITERATION_MODE_CONVERGE = "converge"
 
-# Model evaluation labels and thresholds
 DEFAULT_EXPORT_LIMIT = 5000
 Y_RANDOMIZATION_DEFAULT_PERMUTATIONS = 1000
 R_SQUARED_SYMBOL = "R²"
@@ -525,13 +521,10 @@ def norm_ppf(probs: np.ndarray | float) -> np.ndarray | float:
     """Approximate the standard normal quantile using Acklam's algorithm."""
 
     def _ppf(p: np.ndarray) -> np.ndarray:
-        # Peter John Acklam's rational approximation of the inverse normal CDF.
-        # https://stackedboxes.org/2017/05/01/acklams-normal-quantile-function/
         p = np.asarray(p, dtype=np.float64)
         mask = p < 0.5
         p = np.where(mask, p, 1.0 - p)
 
-        # Coefficients for the approximation
         a1 = -3.969683028665376e+01
         a2 = 2.209460984245205e+02
         a3 = -2.759285104469687e+02
@@ -557,13 +550,11 @@ def norm_ppf(probs: np.ndarray | float) -> np.ndarray | float:
         d3 = 2.445134137142996e+00
         d4 = 3.754408661907416e+00
 
-        # Define breakpoints
         p_low = 0.02425
         p_high = 1 - p_low
 
         result = np.zeros_like(p)
 
-        # Rational approximation for lower region
         mask_low = p < p_low
         if np.any(mask_low):
             q = np.sqrt(-2 * np.log(p[mask_low]))
@@ -571,7 +562,6 @@ def norm_ppf(probs: np.ndarray | float) -> np.ndarray | float:
                 ((((d1 * q + d2) * q + d3) * q + d4) * q + 1)
             )
 
-        # Rational approximation for central region
         mask_central = (p >= p_low) & (p <= p_high)
         if np.any(mask_central):
             q = p[mask_central] - 0.5
@@ -581,7 +571,6 @@ def norm_ppf(probs: np.ndarray | float) -> np.ndarray | float:
                 / (((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1)
             )
 
-        # Rational approximation for upper region
         mask_high = p > p_high
         if np.any(mask_high):
             q = np.sqrt(-2 * np.log(1 - p[mask_high]))
@@ -590,7 +579,6 @@ def norm_ppf(probs: np.ndarray | float) -> np.ndarray | float:
                 / ((((d1 * q + d2) * q + d3) * q + d4) * q + 1)
             )
 
-        # Apply sign
         result = np.where(mask, result, -result)
         return result
 
@@ -1765,7 +1753,6 @@ def parse_configuration_file(
                         ) from exc
                     option_indices[current_option_key] = index
                     current_option_key = None
-                # Ignore option listing lines like "1) Choice"
                 continue
 
             if line.startswith("#"):
@@ -2214,9 +2201,6 @@ def _apply_validation_to_export_df(
                 for key, value in metrics.items():
                     export_df.at[idx, key] = value
             except LOOSingularDesignError:
-                # Match the model-search behaviour used when a LOO metric is
-                # the target: a singular candidate is simply not eligible for
-                # LOO, while validation of the remaining models continues.
                 singular_loo_models += 1
             except Exception as exc:  # noqa: BLE001
                 print(f"Warning: LOO validation failed for model {row.get('Model')}: {exc}")
@@ -3637,8 +3621,6 @@ def _create_cli_tk_root(purpose: str):
             except Exception:  # noqa: BLE001
                 pass
         if xvfb_process is not None:
-            # Keep Xvfb alive until process exit to avoid late client disconnect noise
-            # (e.g. "X connection ... broken") when toolkits finalize asynchronously.
             pass
         if original_display is None:
             os.environ.pop("DISPLAY", None)
@@ -4149,7 +4131,7 @@ def load_dataset(
         if total_columns < 2:
             raise ValueError("The dataset does not contain a second column to use as the target.")
         dependent_idx = 1
-    else:  # third
+    else:
         if total_columns < 3:
             raise ValueError("The dataset does not contain a third column to use as the target.")
         dependent_idx = 2
@@ -4165,7 +4147,6 @@ def load_dataset(
     except ValueError as exc:  # noqa: BLE001
         raise ValueError(f"Non-variable columns: {exc}") from exc
 
-    # Ensure the target column is not treated as non-variable.
     non_variable_indices.discard(dependent_idx)
 
     if non_variable_none_selected:
@@ -5296,7 +5277,6 @@ def _base_compute_metrics(
     if not vars_:
         return None
 
-    # Fast correlation screen
     if not skip_corr_screen:
         for i in range(len(vars_)):
             for j in range(i + 1, len(vars_)):
@@ -5344,9 +5324,6 @@ def _base_compute_metrics(
         try:
             loo_metrics = _evaluate_model_loo(context, vars_, config.clip_predictions)
         except LOOSingularDesignError:
-            # A singular candidate is not a valid regression model.  During a
-            # model search, discard only that candidate instead of aborting the
-            # complete analysis.
             return None
         if not np.isfinite(loo_metrics.get("Q2_loo", float("nan"))):
             return None
@@ -5587,7 +5564,6 @@ def _evaluate_model_bootstrap(
         mae_632p_scores.append(_combine_632plus(err_resub_mae, err_oob_mae, gamma_mae))
         ccc_resub = _compute_lin_ccc_value(y_train, pred_train)
         ccc_oob = _compute_lin_ccc_value(y_oob, pred_oob)
-        # Apply the same .632+ weight used for the bootstrap errors.
         denom = gamma_mse - err_resub_mse
         relative_overfit = 1.0 if (not np.isfinite(denom) or denom <= 0) else float(
             np.clip((err_oob_mse - err_resub_mse) / denom, 0.0, 1.0)
@@ -5700,7 +5676,6 @@ def _compute_external_metrics(
         else:
             q2f3_ext = float(1.0 - (mse_ext / denom_f3))
 
-    # Roy metrics, Spearman, Harrell C-index, coverage probability, and leverage-based ER
     y_arr = np.asarray(y_true, dtype=np.float64)
     p_arr = np.asarray(preds, dtype=np.float64)
     finite = np.isfinite(y_arr) & np.isfinite(p_arr)
@@ -6179,7 +6154,6 @@ def _all_subsets_worker(
     return None, local_counter["r2_calls"], cpu_minutes, os.getpid(), correlation_blocked
 
 
-# EXPAND-PERTURB-REDUCE-SWAP (EPRS-S)
 def eprs(
     context: EPRSContext,
     config: EPRSConfig,
@@ -6211,7 +6185,6 @@ def eprs(
         if limit_reached():
             break
 
-        # Expand
         if len(current) < config.max_vars:
             cands = []
             for v in list(remaining):
@@ -6232,7 +6205,6 @@ def eprs(
         if limit_reached():
             break
 
-        # Perturb
         pert = []
         for rem in current:
             for add in remaining:
@@ -6255,7 +6227,6 @@ def eprs(
         if limit_reached():
             break
 
-        # Reduce (r = 1)
         red = []
         for combo in combinations(current, len(current) - 1):
             m = compute_metrics(list(combo))
@@ -6273,7 +6244,6 @@ def eprs(
         if limit_reached():
             break
 
-        # Correlation clean-up
         again = True
         while again:
             if limit_reached():
@@ -6322,7 +6292,6 @@ def eprs(
         if limit_reached():
             break
 
-        # Swap
         improved = True
         while improved:
             if limit_reached():
@@ -6342,10 +6311,9 @@ def eprs(
                         improved = True
                         break
 
-        # Convergence with fixed tolerance
         repeats = repeats + 1 if best_score == last_score else 0
         last_score = best_score
-        if repeats >= 2:  # fixed inline
+        if repeats >= 2:
             break
 
     return best, current, remaining, dropped
@@ -6428,7 +6396,6 @@ def _process_combination_worker(
         if not best:
             break
 
-        # VIF pruning
         changed = False
         vif_vals = calc_vif(current)
         while vif_vals.size and np.nanmax(vif_vals) > config.vif_threshold:
@@ -6456,7 +6423,7 @@ def _process_combination_worker(
             break
 
     end_time = time.process_time()
-    cpu_time = (end_time - start_time) / 60.0  # minutes
+    cpu_time = (end_time - start_time) / 60.0
 
     return local_hits, counter["r2_calls"], cpu_time
 
@@ -6500,12 +6467,8 @@ def run_eprs(
         if executor_shutdown:
             return
         try:
-            # Always wait for worker cleanup to avoid queue-manager errors on cancellation.
             executor.shutdown(wait=True, cancel_futures=cancel)
         except TypeError:
-            # Python < 3.9 does not support the cancel_futures keyword. In that
-            # case we already cancelled the futures manually, so fall back to
-            # the older signature.
             executor.shutdown(wait=True)
         executor_shutdown = True
 
@@ -6565,7 +6528,6 @@ def run_eprs(
 
     try:
         if iteration_mode == ITERATION_MODE_AUTO:
-            # Initial calibration: use fixed 200000 calls
             log("Starting calibration run...")
             calibration_count = min(config.n_seeds, max_workers)
             calibration_indices = list(range(calibration_count))
@@ -6584,7 +6546,6 @@ def run_eprs(
             auto_iteration_limit = max(1, int(np.ceil(avg_r2_calls_per_cpu)))
             new_MAX_R2_CALLS: Optional[int] = auto_iteration_limit * 2
 
-            # Full execution
             remaining_idx = list(range(calibration_count, config.n_seeds))
             if remaining_idx:
                 remaining_futures = submit_indices(remaining_idx, new_MAX_R2_CALLS)
@@ -6610,7 +6571,6 @@ def run_eprs(
     finally:
         shutdown_executor()
 
-    # Flatten results
     all_hits = [row for hits, _, _ in all_results for row in hits]
     r2_calls_per_cpu = [calls for _, calls, _ in all_results]
     cpu_time_per_cpu = [t for _, _, t in all_results]
@@ -6618,7 +6578,6 @@ def run_eprs(
     if r2_calls_per_cpu:
         avg_r2_calls_per_cpu = float(np.mean(r2_calls_per_cpu))
 
-    # CPU time summary
     cpu_search_minutes = float(np.sum(cpu_time_per_cpu)) if cpu_time_per_cpu else 0.0
 
     models_explored = int(np.sum(r2_calls_per_cpu)) if r2_calls_per_cpu else 0
@@ -6816,8 +6775,6 @@ def run_all_subsets(
         raise
     finally:
         try:
-            # Always wait for worker shutdown so queue manager threads exit cleanly
-            # even when cancellation is requested.
             executor.shutdown(
                 wait=True,
                 cancel_futures=bool(stop_event and stop_event.is_set()),
@@ -7424,7 +7381,6 @@ class MLRXApp(tk.Tk):
 
         data_frame.columnconfigure(1, weight=1)
 
-        # Split controls
         split_frame = ttk.LabelFrame(self.config_tab, text="Data splitting")
         split_frame.pack(fill="x", padx=10, pady=(0, 10))
 
@@ -7552,7 +7508,6 @@ class MLRXApp(tk.Tk):
         self.random_state_mode = tk.StringVar(value="default")
         self.random_state_manual_var = tk.StringVar(value="")
         self.allow_small_seed_count = tk.BooleanVar(value=False)
-        # Internal override: set to False to allow seed settings with All subsets.
         self._restrict_seed_settings_to_eprs = True
         self.seed_size_applied_var = tk.StringVar(value="")
         self.random_state_applied_var = tk.StringVar(value="")
@@ -7996,7 +7951,6 @@ class MLRXApp(tk.Tk):
             "MAE_bs": {"anchor": "center", "min_width": 105, "weight": 0.0},
             "CCC_bs": {"anchor": "center", "min_width": 80, "weight": 0.0},
         }
-        # Keep initial Models-tab internal metrics headings in simple mode (no parentheses).
         self._configure_internal_results_tree(simple=True)
 
         internal_scroll = ttk.Scrollbar(
@@ -8147,8 +8101,6 @@ class MLRXApp(tk.Tk):
 
         self._internal_tree_config_signature = new_signature
 
-        # Re-apply geometry after dynamic column switches so the internal table
-        # keeps the same stable dimensions as the other Models-tab tables.
         self._refresh_results_tab_layout()
 
         self.after_idle(self._initialize_notebook_layouts)
@@ -8338,8 +8290,6 @@ class MLRXApp(tk.Tk):
     def _handle_first_map(self, _event):
         if self._results_layout_initialized:
             return
-        # Schedule a layout pass once Tk finishes processing the map event so
-        # the notebook pages report their observed allocated size.
         self.after(50, self._initialize_notebook_layouts)
 
     def _initialize_notebook_layouts(self):
@@ -8348,8 +8298,6 @@ class MLRXApp(tk.Tk):
         if not self.notebook.winfo_ismapped():
             self.after(50, self._initialize_notebook_layouts)
             return
-        # Ensure geometry calculations run without changing the active tab so
-        # the startup experience remains visually stable.
         self.update_idletasks()
         self._refresh_results_tab_layout()
         self._results_layout_initialized = True
@@ -8374,8 +8322,6 @@ class MLRXApp(tk.Tk):
             if widget is not None:
                 widget.update_idletasks()
 
-        # Ensure layout measurements are computed so all panes render correctly
-        # when the application first appears on screen.
         self.update_idletasks()
         self._refresh_results_tree_columns()
 
@@ -8487,7 +8433,6 @@ class MLRXApp(tk.Tk):
         if last_width == width:
             return
 
-        # Reserve a small padding for the vertical scrollbar and tree borders.
         available = max(width - 16, 0)
         if available <= 0:
             return
@@ -9392,12 +9337,11 @@ class MLRXApp(tk.Tk):
             self.correlation_cache.clear()
 
             context_ready = self._prepare_context_for_loaded_results(allow_prompt=True)
-            # Resolve the training dataset first.  Only after that modal workflow has
-            # closed do we offer to relocate a missing external test dataset, so the
-            # two prompts can never be displayed at the same time.
             if context_ready:
                 self._prompt_for_missing_external_test_dataset()
             self.summary_tab.update_context(self.last_context, self.last_config)
+
+            self._reset_models_tab_sort_headings()
 
             self._suspend_analysis_tab_state_updates += 1
             try:
@@ -10512,8 +10456,6 @@ class MLRXApp(tk.Tk):
         except Exception:  # noqa: BLE001
             metadata["allow_small_seed_count"] = bool(metadata.get("allow_small_seed_count", False))
 
-        # restored sessions match the current UI configuration even when the config
-        # object cannot be rebuilt (e.g., when exporting loaded results).
         try:
             metadata["dependent"] = self._get_dependent_choice()
         except Exception:  # noqa: BLE001
@@ -11007,10 +10949,6 @@ class MLRXApp(tk.Tk):
         self.split_mode.set(mode)
         self._update_split_controls()
 
-        # The external-test reader must follow the delimiter stored with the
-        # loaded results, rather than retaining the UI's default delimiter.
-        # Prefer an explicitly stored validation/external delimiter when present,
-        # then fall back to the dataset delimiter used by current result files.
         validation_meta = metadata.get("validation")
         delimiter_candidates: list[object] = []
         if isinstance(validation_meta, dict):
@@ -12383,6 +12321,13 @@ class MLRXApp(tk.Tk):
             return text
         return self._stylize_active_sort_heading(text)
 
+    def _reset_models_tab_sort_headings(self) -> None:
+        """Restore the default sort columns and their heading emphasis."""
+        self.training_sort_metric = self._default_training_sort_metric()
+        self.internal_sort_metric = "Q2_loo"
+        self.external_sort_metric = "CCC_ext"
+        self._refresh_models_tab_sort_headings()
+
     def _refresh_models_tab_sort_headings(self) -> None:
         style = ttk.Style()
         try:
@@ -12666,7 +12611,6 @@ class MLRXApp(tk.Tk):
             visual_tab._label_manager = preview_label_manager
             visual_tab._current_plot_key = "exp_vs_pred"
 
-            # Reuse the same identity and label behavior as Visualization tab for exp_vs_pred.
             visual_tab._sync_linear_fit_controls("exp_vs_pred")
             if original_identity_disabled_for_plot:
                 visual_tab.identity_var.set(original_identity_prev_value)
@@ -14842,10 +14786,6 @@ class ValidationTab(ttk.Frame):
                                 result_row.update(self._evaluate_model_loo(variables))
                                 item["method_success"] = True
                             except LOOSingularDesignError:
-                                # Singular models are ineligible for LOO, just
-                                # as they are when a LOO metric drives the
-                                # model search.  Other requested validation
-                                # methods can still be evaluated for the model.
                                 pass
                             except Exception as exc:  # noqa: BLE001
                                 errors.append(f"Model {model_id} (LOO): {exc}")
@@ -19334,8 +19274,8 @@ class SummaryTab(ttk.Frame):
                 "Term ",
                 "  Coef.",
                 "Std. Err.",
-                "  \U0001D461",
-                "   \U0001D45D",
+                "  t",
+                "   p",
                 f"   [{self._format_confint_quantile_label(lower_quantile)}",
                 f" {self._format_confint_quantile_label(upper_quantile)}]",
                 "VIF",
@@ -20159,8 +20099,8 @@ class SummaryTab(ttk.Frame):
         notation_candidates: tuple[tuple[str, str, str], ...] = (
             ("Coef.", "Coefficient estimate", "Coef."),
             ("Std. Err.", "Standard error of the coefficient", "Std. Err."),
-            ("\U0001D461", "t-statistic for the coefficient", "\U0001D461"),
-            ("\U0001D45D", "Two-tailed p-value for the coefficient", "\U0001D45D"),
+            ("t", "t-statistic for the coefficient", "t"),
+            ("p", "Two-tailed p-value for the coefficient", "p"),
             ("Contrib.", "Predictor contribution to model fit", "Contrib."),
             ("R²", "Coefficient of determination", "R²"),
             ("adj-R²", "Adjusted coefficient of determination", "adj-R²"),
@@ -20373,8 +20313,8 @@ class SummaryTab(ttk.Frame):
                 "HC3",
                 "Coef.",
                 "Std. Err.",
-                "\U0001D461",
-                "\U0001D45D",
+                "t",
+                "p",
                 "Contrib.",
                 "R²",
                 "RMSE",
@@ -27481,7 +27421,6 @@ class VisualizationTab(ttk.Frame):
         x_center = (axes_bbox.x0 + axes_bbox.x1) / 2.0
         y_center = (axes_bbox.y0 + axes_bbox.y1) / 2.0
 
-        # Map the legend centre to one of Matplotlib's canonical locations.
         if x_center < 1 / 3:
             horiz = "left"
         elif x_center > 2 / 3:
@@ -27827,7 +27766,6 @@ class VisualizationTab(ttk.Frame):
         base_cx = (base_bbox.x0 + base_bbox.x1) / 2.0
         base_cy = (base_bbox.y0 + base_bbox.y1) / 2.0
 
-        # Heatmaps should use most of the available canvas, especially in compact windows.
         target_width = min(0.92, max(0.58, base_bbox.width * 1.08))
         target_height = min(0.90, max(0.58, base_bbox.height * 0.5))
         center_y = min(0.91, max(0.58, base_cy + 0.02))
