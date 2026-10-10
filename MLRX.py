@@ -6982,6 +6982,8 @@ class MLRXApp(tk.Tk):
         self.selected_model_id: Optional[int] = None
         self.data_path_var = tk.StringVar(value="data.csv")
         self._filter_variable_entry = tk.StringVar(value="")
+        self._filter_vif_max_entry = tk.StringVar(value="")
+        self._filter_model_id_entry = tk.StringVar(value="")
         self._filter_variables: list[tuple[str, tk.BooleanVar]] = []
         self._filter_window: Optional[tk.Toplevel] = None
         self._filter_list_frame: Optional[ttk.Frame] = None
@@ -7788,7 +7790,7 @@ class MLRXApp(tk.Tk):
             self.results_tab.grid_rowconfigure(row, weight=1, uniform="results_rows")
 
         training_frame = ttk.LabelFrame(self.results_tab, text="Top models training")
-        training_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(5))
+        training_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=3)
         training_frame.grid_rowconfigure(0, weight=1)
         training_frame.grid_columnconfigure(0, weight=1)
         self.training_frame = training_frame
@@ -7862,11 +7864,8 @@ class MLRXApp(tk.Tk):
         self.training_tree.grid(row=0, column=0, sticky="nsew", padx=(5, 0), pady=5)
         training_scroll.grid(row=0, column=1, sticky="ns", padx=(0, 5), pady=5)
 
-        internal_frame = ttk.LabelFrame(
-            self.results_tab,
-            text="Top models internal validation",
-        )
-        internal_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        internal_frame = ttk.LabelFrame(self.results_tab, text="Top models internal validation")
+        internal_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=3)
         internal_frame.grid_rowconfigure(0, weight=1)
         internal_frame.grid_columnconfigure(0, weight=1)
         self.internal_results_frame = internal_frame
@@ -7961,7 +7960,7 @@ class MLRXApp(tk.Tk):
         internal_scroll.grid(row=0, column=1, sticky="ns", padx=(0, 5), pady=5)
 
         ext_frame = ttk.LabelFrame(self.results_tab, text="Top models external validation")
-        ext_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(5))
+        ext_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=3)
         ext_frame.grid_rowconfigure(0, weight=1)
         ext_frame.grid_columnconfigure(0, weight=1)
         self.external_results_frame = ext_frame
@@ -8038,7 +8037,199 @@ class MLRXApp(tk.Tk):
         self.training_tree.bind("<Button-3>", self._handle_models_tree_right_click, add="+")
         self.internal_results_tree.bind("<Button-3>", self._handle_models_tree_right_click, add="+")
         self.external_results_tree.bind("<Button-3>", self._handle_models_tree_right_click, add="+")
+        self._create_pinned_models_rows()
         self._refresh_models_tab_sort_headings()
+
+    def _create_pinned_models_rows(self) -> None:
+        self._pinned_models_trees: dict[ttk.Treeview, ttk.Treeview] = {}
+        self._models_header_trees: dict[ttk.Treeview, ttk.Treeview] = {}
+        self._models_tree_heights: dict[ttk.Treeview, int] = {}
+        self._models_manual_widths: dict[ttk.Treeview, dict[str, int]] = {}
+        self._models_manual_width_reference: dict[ttk.Treeview, int] = {}
+        self._models_resizing_header: Optional[ttk.Treeview] = None
+        style = ttk.Style(self)
+        # Pale blue simulates a translucent selection without hiding cell text.
+        style.map(
+            "ModelsSelection.Treeview",
+            background=[("selected", "focus", "#dbeeff"), ("selected", "#eaf4ff")],
+            foreground=[("selected", "#0a0a0a")],
+        )
+        style.layout("PinnedModels.Treeview", [("Treeview.padding", {"sticky": "nswe", "children": [("Treeview.treearea", {"sticky": "nswe"})]})])
+        style.configure("PinnedModels.Treeview", padding=(1, 0, 1, 0), background="#eef2f6", fieldbackground="#eef2f6", foreground="#0a0a0a")
+        style.map("PinnedModels.Treeview", background=[("selected", "#eef2f6")], foreground=[("selected", "#0a0a0a")])
+        self._pinned_model_id_font = tkfont.nametofont("TkDefaultFont").copy()
+        self._pinned_model_id_font.configure(weight="bold")
+        self._pinned_models_decorations: dict[ttk.Treeview, tuple[tk.Label, list[tk.Frame]]] = {}
+        for tree in (self.training_tree, self.internal_results_tree, self.external_results_tree):
+            frame = tree.master
+            frame.grid_rowconfigure(0, weight=0)
+            frame.grid_rowconfigure(1, weight=0)
+            frame.grid_rowconfigure(2, weight=1)
+            self._models_tree_heights[tree] = int(tree.cget("height"))
+            tree.configure(show="", style="ModelsSelection.Treeview")
+            tree.tag_configure("models_selected_row", background="#dbeeff", foreground="#0a0a0a")
+            tree.bind("<<TreeviewSelect>>", self._handle_models_row_selection, add="+")
+            tree.grid_configure(row=2, pady=(0, 5))
+            for child in frame.winfo_children():
+                if isinstance(child, ttk.Scrollbar):
+                    child.grid_configure(row=2, pady=(0, 5))
+            header = ttk.Treeview(frame, columns=tree.cget("columns"), show="headings", height=0)
+            header.grid(row=0, column=0, sticky="ew", padx=(5, 0), pady=(5, 0))
+            self._models_header_trees[tree] = header
+            header.bind("<Button-1>", self._begin_models_column_resize, add="+")
+            # Run after ttk's class binding so the propagated width is the new width.
+            resize_tag = f"ModelsHeaderResize{header}"
+            tags = list(header.bindtags())
+            tags.insert(tags.index("Treeview") + 1, resize_tag)
+            header.bindtags(tuple(tags))
+            header.bind_class(resize_tag, "<B1-Motion>", self._sync_models_column_resize)
+            header.bind_class(resize_tag, "<ButtonRelease-1>", self._finish_models_column_resize)
+            header.bind("<Double-Button-1>", self._handle_models_tree_double_click, add="+")
+            header.bind("<Button-3>", self._handle_models_tree_right_click, add="+")
+            # A dedicated grid row keeps the selected model outside the scrolling body.
+            pinned = ttk.Treeview(
+                frame, columns=tree.cget("columns"), show="", height=1,
+                style="PinnedModels.Treeview",
+            )
+            self._pinned_models_trees[tree] = pinned
+            pinned.bind("<<TreeviewSelect>>", self._handle_models_row_selection, add="+")
+            pinned.grid(row=1, column=0, sticky="ew", padx=(5, 0))
+            pinned.grid_remove()
+            model_label = tk.Label(
+                pinned, font=self._pinned_model_id_font, background="#eef2f6",
+                foreground="#0a0a0a", borderwidth=0, highlightthickness=0, padx=0, pady=0,
+            )
+            edges = [tk.Frame(pinned, background="#303740", borderwidth=0) for _ in range(4)]
+            self._pinned_models_decorations[pinned] = (model_label, edges)
+            for decoration in (model_label, *edges):
+                decoration.bind("<Button-1>", lambda event, owner=pinned: owner.selection_set(owner.get_children()))
+                decoration.bind("<Double-Button-1>", lambda event, owner=pinned: self._handle_pinned_models_decoration_event(event, owner, self._handle_models_tree_double_click))
+                decoration.bind("<Button-3>", lambda event, owner=pinned: self._handle_pinned_models_decoration_event(event, owner, self._handle_models_tree_right_click))
+                for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                    decoration.bind(sequence, lambda _event: "break")
+            tree.bind("<Configure>", lambda _event, owner=tree: self._position_pinned_models_row(owner), add="+")
+            pinned.bind("<Double-Button-1>", self._handle_models_tree_double_click, add="+")
+            pinned.bind("<Button-3>", self._handle_models_tree_right_click, add="+")
+            for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>", "<Up>", "<Down>", "<Prior>", "<Next>", "<Home>", "<End>"):
+                pinned.bind(sequence, lambda _event: "break")
+
+    def _handle_models_row_selection(self, event: tk.Event) -> None:
+        selected_tree = event.widget
+        selected_items = selected_tree.selection()
+        if not selected_items:
+            return
+        # Paint cell backgrounds with an item tag instead of the native theme's
+        # selection band. Tk draws the values on top of these backgrounds.
+        for tree, pinned in self._pinned_models_trees.items():
+            for item in tree.tag_has("models_selected_row"):
+                tags = tuple(tag for tag in tree.item(item, "tags") if tag != "models_selected_row")
+                tree.item(item, tags=tags)
+            if selected_tree is tree:
+                for item in selected_items:
+                    tags = tuple(tree.item(item, "tags"))
+                    tree.item(item, tags=tags + ("models_selected_row",))
+            for widget in (tree, pinned):
+                if widget.selection():
+                    widget.selection_remove(*widget.selection())
+
+    def _begin_models_column_resize(self, event: tk.Event) -> None:
+        self._models_resizing_header = (
+            event.widget if event.widget.identify_region(event.x, event.y) == "separator" else None
+        )
+
+    def _sync_models_column_resize(self, event: tk.Event) -> None:
+        header = event.widget
+        if header is not self._models_resizing_header:
+            return
+        tree = next((owner for owner, widget in self._models_header_trees.items() if widget is header), None)
+        if tree is None:
+            return
+        widths = {column: int(header.column(column, "width")) for column in header.cget("columns")}
+        self._models_manual_widths[tree] = widths
+        self._models_manual_width_reference[tree] = max(tree.winfo_width() - 16, 1)
+        for column, width in widths.items():
+            tree.column(column, width=width)
+        self._copy_pinned_models_columns(tree)
+
+    def _finish_models_column_resize(self, event: tk.Event) -> None:
+        self._sync_models_column_resize(event)
+        self._models_resizing_header = None
+
+    def _position_pinned_models_row(self, tree: ttk.Treeview) -> None:
+        pinned = getattr(self, "_pinned_models_trees", {}).get(tree)
+        if pinned is None or not pinned.get_children():
+            return
+        row_height = int(ttk.Style(self).lookup("Treeview", "rowheight") or 20)
+        pinned.grid()
+        self._decorate_pinned_models_row(pinned, row_height)
+
+    def _handle_pinned_models_decoration_event(self, event: tk.Event, pinned: ttk.Treeview, handler: Callable) -> None:
+        event.x += event.widget.winfo_x()
+        event.y += event.widget.winfo_y()
+        event.widget = pinned
+        handler(event)
+
+    def _decorate_pinned_models_row(self, pinned: ttk.Treeview, row_height: int) -> None:
+        model_label, edges = self._pinned_models_decorations[pinned]
+        items = pinned.get_children()
+        if not items:
+            return
+        model_label.configure(text=pinned.item(items[0], "values")[0])
+        model_label.place(x=3, y=2, width=max(pinned.column("Model", "width") - 4, 1), height=max(row_height - 4, 1))
+        model_label.lift()
+        # Draw inward so the outline never changes the table or row dimensions.
+        edges[0].place(x=0, y=0, relwidth=1, height=1)
+        edges[1].place(x=0, rely=1, y=-1, relwidth=1, height=1)
+        edges[2].place(x=0, y=0, width=1, relheight=1)
+        edges[3].place(relx=1, x=-1, y=0, width=1, relheight=1)
+        for edge in edges:
+            edge.lift()
+
+    def _copy_pinned_models_columns(self, tree: ttk.Treeview) -> None:
+        pinned = getattr(self, "_pinned_models_trees", {}).get(tree)
+        if pinned is None:
+            return
+        columns = tuple(tree.cget("columns"))
+        for target in (pinned, self._models_header_trees[tree]):
+            if tuple(target.cget("columns")) != columns:
+                target.configure(columns=columns)
+            target.configure(displaycolumns=tree.cget("displaycolumns"))
+            for column in columns:
+                settings = tree.column(column)
+                settings.pop("id", None)
+                target.column(column, **settings)
+                heading = tree.heading(column)
+                heading.pop("state", None)
+                target.heading(column, **heading)
+        if pinned.get_children():
+            self._decorate_pinned_models_row(pinned, int(ttk.Style(self).lookup("Treeview", "rowheight") or 20))
+
+    def _clear_pinned_models_row(self, tree: ttk.Treeview) -> None:
+        pinned = getattr(self, "_pinned_models_trees", {}).get(tree)
+        if pinned is not None:
+            pinned.grid_remove()
+            pinned.delete(*pinned.get_children())
+            tree.configure(height=self._models_tree_heights[tree])
+
+    def _sync_pinned_models_row(self, tree: ttk.Treeview) -> None:
+        pinned = getattr(self, "_pinned_models_trees", {}).get(tree)
+        if pinned is None:
+            return
+        self._copy_pinned_models_columns(tree)
+        if self.selected_model_id is not None:
+            for item in tree.get_children():
+                values = tree.item(item, "values")
+                if values and self._safe_int(values[0]) == self.selected_model_id:
+                    existing = pinned.get_children()
+                    if existing:
+                        pinned.item(existing[0], values=values)
+                    else:
+                        pinned.insert("", "end", values=values)
+                    tree.delete(item)
+                    tree.configure(height=max(self._models_tree_heights[tree] - 1, 0))
+                    self._position_pinned_models_row(tree)
+                    return
+        self._clear_pinned_models_row(tree)
 
     def _configure_internal_results_tree(
         self,
@@ -8488,10 +8679,17 @@ class MLRXApp(tk.Tk):
                         remain -= 1
                         idx += 1
 
+        manual_widths = getattr(self, "_models_manual_widths", {}).get(tree, {})
+        reference_width = getattr(self, "_models_manual_width_reference", {}).get(tree, available)
+        manual_scale = available / max(reference_width, 1)
         for spec, column_width in zip(specs, widths):
+            if spec.name in manual_widths:
+                # Preserve the user's proportions while adapting to the new table width.
+                column_width = round(manual_widths[spec.name] * manual_scale)
             tree.column(spec.name, width=max(column_width, 20))
 
         self._results_tree_last_widths[tree] = width
+        self._copy_pinned_models_columns(tree)
 
     def _update_split_controls(self):
         mode = self.split_mode.get()
@@ -9477,6 +9675,21 @@ class MLRXApp(tk.Tk):
         container = ttk.Frame(window, padding=12)
         container.pack(fill="both", expand=True)
 
+        for label, variable in (
+            ("Model IDs (1, 3)", self._filter_model_id_entry),
+            ("VIF max <=", self._filter_vif_max_entry),
+        ):
+            row = ttk.Frame(container)
+            row.pack(fill="x", pady=(0, 6))
+            ttk.Label(row, text=label, width=14).pack(side="left")
+            if variable is self._filter_vif_max_entry:
+                ttk.Entry(row, textvariable=variable, width=5).pack(side="left")
+            else:
+                ttk.Entry(row, textvariable=variable).pack(side="left", fill="x", expand=True)
+        ttk.Label(container, text="Leave blank to ignore. All filters are combined.").pack(
+            anchor="w", pady=(0, 10)
+        )
+
         ttk.Label(container, text="Filter by variable").pack(anchor="w")
 
         entry_row = ttk.Frame(container)
@@ -9572,7 +9785,32 @@ class MLRXApp(tk.Tk):
             if state.get() and name.strip()
         ]
 
-        if not required:
+        vif_text = self._filter_vif_max_entry.get().strip()
+        model_text = self._filter_model_id_entry.get().strip()
+        vif_limit: Optional[float] = None
+        model_ids: Optional[set[int]] = None
+        if vif_text:
+            try:
+                vif_limit = float(vif_text)
+                if not math.isfinite(vif_limit) or vif_limit < 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showwarning(
+                    "Filter models", "VIF max must be a finite, non-negative number."
+                )
+                return
+        if model_text:
+            try:
+                model_ids = {int(token.strip()) for token in model_text.split(",")}
+                if any(model_id < 1 for model_id in model_ids):
+                    raise ValueError
+            except ValueError:
+                messagebox.showwarning(
+                    "Filter models", "Model IDs must be positive integers separated by commas (e.g. 1, 3, 7)."
+                )
+                return
+
+        if not required and vif_limit is None and model_ids is None:
             self._load_training_results(base_df)
             self.update_internal_results(
                 self.full_internal_results, remember_source=False, auto_export=False
@@ -9589,14 +9827,21 @@ class MLRXApp(tk.Tk):
         for _, row in base_df.iterrows():
             variables = self._normalize_variables(row.get("Predictors"))
             variable_set = {item.lower() for item in variables}
-            if all(name in variable_set for name in normalized_required):
-                filtered_rows.append(row)
+            if not all(name in variable_set for name in normalized_required):
+                continue
+            if vif_limit is not None:
+                vif = self._safe_float(row.get("VIF_max"))
+                if vif is None or not math.isfinite(vif) or vif > vif_limit:
+                    continue
+            if model_ids is not None and self._safe_int(row.get("Model")) not in model_ids:
+                continue
+            filtered_rows.append(row)
 
         filtered_df = pd.DataFrame(filtered_rows)
         if filtered_df.empty:
             messagebox.showinfo(
                 "Filter models",
-                "No models contain all selected variables. Adjust your selection and try again.",
+                "No models match the selected filters. Adjust your selection and try again.",
             )
             return
 
@@ -9777,13 +10022,18 @@ class MLRXApp(tk.Tk):
 
         self._filter_variables.clear()
         self._filter_variable_entry.set("")
+        self._filter_vif_max_entry.set("")
+        self._filter_model_id_entry.set("")
         self._close_filter_window()
 
         if hasattr(self, "training_tree"):
+            self._clear_pinned_models_row(self.training_tree)
             self.training_tree.delete(*self.training_tree.get_children())
         if hasattr(self, "internal_results_tree"):
+            self._clear_pinned_models_row(self.internal_results_tree)
             self.internal_results_tree.delete(*self.internal_results_tree.get_children())
         if hasattr(self, "external_results_tree"):
+            self._clear_pinned_models_row(self.external_results_tree)
             self.external_results_tree.delete(*self.external_results_tree.get_children())
 
         self.validation_tab.clear_results_for_new_training_run()
@@ -11752,6 +12002,7 @@ class MLRXApp(tk.Tk):
         self.notebook.tab(self.diagnostics_tab, state="disabled")
         self.notebook.tab(self.visual_tab, state="disabled")
         self._update_prediction_tab_state()
+        self._clear_pinned_models_row(self.training_tree)
         self.training_tree.delete(*self.training_tree.get_children())
         self.update_internal_results([])
         self.update_external_results([])
@@ -11930,6 +12181,7 @@ class MLRXApp(tk.Tk):
         else:
             summary_lines.append("No models met the reporting threshold.")
             self._update_training_order(None)
+            self._clear_pinned_models_row(self.training_tree)
             self.training_tree.delete(*self.training_tree.get_children())
             self.update_internal_results([])
             self.validation_tab.clear_results_for_new_training_run()
@@ -12006,6 +12258,7 @@ class MLRXApp(tk.Tk):
         self.variable_tab.prepare_for_new_run()
         self.notebook.tab(self.visual_tab, state="disabled")
         self._update_prediction_tab_state()
+        self._clear_pinned_models_row(self.training_tree)
         self.training_tree.delete(*self.training_tree.get_children())
         self._update_training_order(None)
         self.update_internal_results([])
@@ -12038,6 +12291,7 @@ class MLRXApp(tk.Tk):
         if df is None or df.empty:
             self.last_results_df = df
             self.selected_model_id = None
+            self._clear_pinned_models_row(self.training_tree)
             self.training_tree.delete(*self.training_tree.get_children())
             self._update_training_order(df)
             if hasattr(self, "summary_tab"):
@@ -12370,6 +12624,8 @@ class MLRXApp(tk.Tk):
             _apply(self.internal_results_tree, tuple(self.internal_results_columns), heading_map, self.internal_sort_metric)
         if hasattr(self, "external_results_tree") and hasattr(self, "external_heading_map"):
             _apply(self.external_results_tree, tuple(self.external_results_columns), self.external_heading_map, self.external_sort_metric)
+        for tree in getattr(self, "_pinned_models_trees", {}):
+            self._copy_pinned_models_columns(tree)
 
     def _handle_models_tree_double_click(self, event: tk.Event) -> None:
         widget = event.widget
@@ -12425,6 +12681,10 @@ class MLRXApp(tk.Tk):
         if column_index < 0 or column_index >= len(columns):
             return False
         metric_key = columns[column_index]
+        widget = next(
+            (tree for tree, header in getattr(self, "_models_header_trees", {}).items() if header is widget),
+            widget,
+        )
 
         if widget is self.training_tree:
             self.training_sort_metric = metric_key
@@ -12518,6 +12778,8 @@ class MLRXApp(tk.Tk):
 
     def _clear_selected_model_push(self, *, refresh_tables: bool = True) -> None:
         self.selected_model_id = None
+        for tree in getattr(self, "_pinned_models_trees", {}):
+            self._clear_pinned_models_row(tree)
         self._set_shared_model_selection("")
         if refresh_tables:
             self._resort_results_tables()
@@ -12836,6 +13098,7 @@ class MLRXApp(tk.Tk):
             if hasattr(self, "summary_tab"):
                 self.summary_tab.update_training_results(sorted_df)
         else:
+            self._clear_pinned_models_row(self.training_tree)
             self.training_tree.delete(*self.training_tree.get_children())
             self._update_training_order(None)
             if hasattr(self, "visual_tab"):
@@ -12855,6 +13118,7 @@ class MLRXApp(tk.Tk):
                 self.summary_tab.update_internal_results(sorted_internal)
         else:
             self._configure_internal_results_tree(simple=True)
+            self._clear_pinned_models_row(self.internal_results_tree)
             self.internal_results_tree.delete(*self.internal_results_tree.get_children())
 
         if self.last_external_results:
@@ -12864,6 +13128,7 @@ class MLRXApp(tk.Tk):
             if hasattr(self, "summary_tab"):
                 self.summary_tab.update_external_results(sorted_external)
         else:
+            self._clear_pinned_models_row(self.external_results_tree)
             self.external_results_tree.delete(*self.external_results_tree.get_children())
 
         self._update_prediction_tab_state()
@@ -12975,6 +13240,7 @@ class MLRXApp(tk.Tk):
         self.training_tree.delete(*self.training_tree.get_children())
 
         if df is None or df.empty:
+            self._clear_pinned_models_row(self.training_tree)
             return
 
         def fmt(value: Optional[float]) -> str:
@@ -13002,6 +13268,7 @@ class MLRXApp(tk.Tk):
                 fmt(row.get("CCC")),
             ]
             self.training_tree.insert("", "end", values=values)
+        self._sync_pinned_models_row(self.training_tree)
 
     def _sort_internal_results(self, results: list[dict]) -> list[dict]:
         if not results:
@@ -13111,6 +13378,7 @@ class MLRXApp(tk.Tk):
 
         if hide_loo and hide_kfold and hide_bootstrap:
             self._configure_internal_results_tree(simple=True)
+            self._clear_pinned_models_row(self.internal_results_tree)
             self.internal_results_tree.delete(*self.internal_results_tree.get_children())
             return
 
@@ -13202,6 +13470,7 @@ class MLRXApp(tk.Tk):
             use_simple_mode = True
 
         if not rows:
+            self._clear_pinned_models_row(self.internal_results_tree)
             self.internal_results_tree.delete(*self.internal_results_tree.get_children())
             return
 
@@ -13286,6 +13555,7 @@ class MLRXApp(tk.Tk):
             self.internal_results_tree.delete(*existing_items)
             for values in rendered_values:
                 self.internal_results_tree.insert("", "end", values=values)
+        self._sync_pinned_models_row(self.internal_results_tree)
 
     def _sort_external_results(self, results: list[dict]) -> list[dict]:
         if not results:
@@ -13338,6 +13608,7 @@ class MLRXApp(tk.Tk):
         self.external_results_tree.delete(*self.external_results_tree.get_children())
 
         if not rows:
+            self._clear_pinned_models_row(self.external_results_tree)
             return
 
         def fmt(value: Optional[float]) -> str:
@@ -13364,6 +13635,7 @@ class MLRXApp(tk.Tk):
                 fmt(row.get("CWC_ext", row.get("CWC"))),
             ]
             self.external_results_tree.insert("", "end", values=values)
+        self._sync_pinned_models_row(self.external_results_tree)
 
     def _format_progress_text(self, percent: int) -> str:
         return f"Progress: {percent}%"
@@ -15756,7 +16028,7 @@ class PredictionTab(ttk.Frame):
                 parent=window,
                 title='Export predictor count plot',
                 defaultextension='.png',
-                initialfile='Prediction_predictor_count.png',
+                initialfile='prediction_predictor_frequency.png',
                 filetypes=[('PNG image', '*.png'), ('PDF file', '*.pdf'), ('SVG file', '*.svg'), ('All files', '*.*')],
             )
             if not output_path:
@@ -16035,7 +16307,7 @@ class PredictionTab(ttk.Frame):
             parent=self,
             title='Export prediction data',
             defaultextension='.csv',
-            initialfile='Prediction_table.csv',
+            initialfile='predictions.csv',
             filetypes=[('CSV files', '*.csv'), ('All files', '*.*')],
         )
         if not output_path:
@@ -16101,7 +16373,7 @@ class PredictionTab(ttk.Frame):
             parent=parent,
             title=f'Export {label} plot',
             defaultextension='.png',
-            initialfile=f'Prediction_{label}_plot.png',
+            initialfile=_default_export_filename(f'prediction_{label}', 'png'),
             filetypes=[('PNG image', '*.png'), ('PDF file', '*.pdf'), ('SVG file', '*.svg'), ('All files', '*.*')],
         )
         if not output_path:
@@ -17063,7 +17335,7 @@ class PredictionTab(ttk.Frame):
                 parent=window,
                 title='Export RSD plot',
                 defaultextension='.png',
-                initialfile='Prediction_RSD_plot.png',
+                initialfile='prediction_relative_standard_deviation.png',
                 filetypes=[('PNG image', '*.png'), ('PDF file', '*.pdf'), ('SVG file', '*.svg'), ('All files', '*.*')],
             )
             if not output_path:
@@ -21657,7 +21929,7 @@ class ObservationDiagnosticsTab(ttk.Frame):
             return
 
         default_name = (
-            f"model_{self.current_model_id}_correlation.csv"
+            f"model_{self.current_model_id}_correlation_matrix.csv"
             if self.current_model_id is not None
             else "correlation_matrix.csv"
         )
@@ -22341,6 +22613,14 @@ class VariableExplorerTab(ttk.Frame):
         self.bar_color_label: Optional[ttk.Label] = None
         self.bar_color_combo: Optional[ttk.Combobox] = None
         self.predictor_keys_button: Optional[ttk.Button] = None
+        self._predictor_keys_window: Optional[tk.Toplevel] = None
+        self._predictor_keys_models_var = tk.StringVar(master=self, value="1-100")
+        self._predictor_keys_color_var = tk.StringVar(master=self, value="Default")
+        self._predictor_keys_count_var = tk.StringVar(master=self, value="10")
+        self._predictor_keys_aspect_var = tk.StringVar(master=self, value="1")
+        self._predictor_keys_top_enabled_var = tk.BooleanVar(master=self, value=False)
+        self._predictor_keys_top_count_var = tk.StringVar(master=self, value="10")
+        self._predictor_keys_top_metric_var = tk.StringVar(master=self, value="CCC (ext)")
         self.marker_color_combo: Optional[ttk.Combobox] = None
         self.marker_style_combo: Optional[ttk.Combobox] = None
         self.marker_size_label: Optional[ttk.Label] = None
@@ -22636,11 +22916,19 @@ class VariableExplorerTab(ttk.Frame):
         except Exception:  # noqa: BLE001
             pass
 
+    def _predictor_keys_results(self) -> Optional[pd.DataFrame]:
+        """Use all loaded models, independently of the Models tab filters."""
+        full_results = getattr(self.master_app, "full_results_df", None)
+        if full_results is not None:
+            return full_results
+        return self._results_df
+
     def _available_model_ids(self) -> list[int]:
-        if self._results_df is None or self._results_df.empty or "Model" not in self._results_df.columns:
+        results_df = self._predictor_keys_results()
+        if results_df is None or results_df.empty or "Model" not in results_df.columns:
             return []
         model_ids: list[int] = []
-        for value in self._results_df["Model"].tolist():
+        for value in results_df["Model"].tolist():
             parsed = self.master_app._safe_int(value)
             if parsed is not None:
                 model_ids.append(parsed)
@@ -22661,9 +22949,10 @@ class VariableExplorerTab(ttk.Frame):
         return [mid for mid in selected_ids if mid in available_set]
 
     def _predictor_counts_for_models(self, model_ids: list[int]) -> pd.DataFrame:
-        if self._results_df is None or self._results_df.empty or not model_ids:
+        results_df = self._predictor_keys_results()
+        if results_df is None or results_df.empty or not model_ids:
             return pd.DataFrame(columns=["Predictors", "count"])
-        subset = self._results_df[self._results_df["Model"].isin(model_ids)]
+        subset = results_df[results_df["Model"].isin(model_ids)]
         if subset.empty:
             return pd.DataFrame(columns=["Predictors", "count"])
 
@@ -22680,7 +22969,8 @@ class VariableExplorerTab(ttk.Frame):
         return pd.DataFrame(ordered, columns=["Predictors", "count"])
 
     def _model_rank_for_models(self, model_ids: list[int], counts_df: pd.DataFrame) -> list[tuple[int, int]]:
-        if self._results_df is None or self._results_df.empty or not model_ids:
+        results_df = self._predictor_keys_results()
+        if results_df is None or results_df.empty or not model_ids:
             return []
         if counts_df is None or counts_df.empty:
             return []
@@ -22693,7 +22983,7 @@ class VariableExplorerTab(ttk.Frame):
             return []
 
         scores: list[tuple[int, int]] = []
-        subset = self._results_df[self._results_df["Model"].isin(model_ids)]
+        subset = results_df[results_df["Model"].isin(model_ids)]
         for _, row in subset.iterrows():
             model_id = self.master_app._safe_int(row.get("Model"))
             if model_id is None:
@@ -22710,12 +23000,23 @@ class VariableExplorerTab(ttk.Frame):
         return scores
 
     def _open_predictor_keys_window(self) -> None:
+        if self._predictor_keys_window is not None and self._predictor_keys_window.winfo_exists():
+            self._predictor_keys_window.deiconify()
+            self._predictor_keys_window.lift()
+            return
         available_ids = self._available_model_ids()
         if not available_ids:
             messagebox.showwarning("Desktop", "No model results are available.")
             return
 
         window = tk.Toplevel(self)
+        self._predictor_keys_window = window
+
+        def _clear_window_ref(event: tk.Event) -> None:
+            if event.widget is window:
+                self._predictor_keys_window = None
+
+        window.bind("<Destroy>", _clear_window_ref, add="+")
         window.withdraw()
         window.title("Predictor keys")
         window.transient(self.winfo_toplevel())
@@ -22728,7 +23029,7 @@ class VariableExplorerTab(ttk.Frame):
         left_controls = ttk.Frame(top_controls)
         left_controls.grid(row=0, column=0, sticky="w")
         ttk.Label(left_controls, text="Multiple models:").pack(side="left")
-        models_var = tk.StringVar(value="1-100")
+        models_var = self._predictor_keys_models_var
         models_entry = ttk.Entry(left_controls, textvariable=models_var, width=24)
         models_entry.pack(side="left", padx=(8, 6))
 
@@ -22741,9 +23042,9 @@ class VariableExplorerTab(ttk.Frame):
         canvas = FigureCanvasTkAgg(figure, master=container)
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=10, pady=(5, 5))
 
-        plot_color_var = tk.StringVar(value="Default")
-        predictors_var = tk.StringVar(value="10")
-        aspect_ratio_var = tk.StringVar(value="1")
+        plot_color_var = self._predictor_keys_color_var
+        predictors_var = self._predictor_keys_count_var
+        aspect_ratio_var = self._predictor_keys_aspect_var
         aspect_ratio_map: dict[str, tuple[int, int]] = {"1": (1, 1), "2": (4, 3), "3": (16, 9), "4": (9, 16)}
 
         selected_ids: list[int] = []
@@ -22822,9 +23123,9 @@ class VariableExplorerTab(ttk.Frame):
             rank_window.transient(window)
             rank_window.geometry("340x430")
 
-            top_filter_enabled_var = tk.BooleanVar(value=False)
-            top_count_var = tk.StringVar(value="10")
-            top_metric_var = tk.StringVar(value="CCC (ext)")
+            top_filter_enabled_var = self._predictor_keys_top_enabled_var
+            top_count_var = self._predictor_keys_top_count_var
+            top_metric_var = self._predictor_keys_top_metric_var
 
             controls = ttk.Frame(rank_window)
             controls.pack(fill="x", padx=10, pady=(10, 0))
@@ -22882,7 +23183,7 @@ class VariableExplorerTab(ttk.Frame):
                 cwc_map = {}
                 q2loo_map = {}
 
-                for row in getattr(self.master_app, "last_external_results", []) or []:
+                for row in (getattr(self.master_app, "full_external_results", None) or getattr(self.master_app, "last_external_results", [])) or []:
                     model_id = self.master_app._safe_int(row.get("Model"))
                     if model_id is None or model_id not in selected_set:
                         continue
@@ -22891,15 +23192,16 @@ class VariableExplorerTab(ttk.Frame):
                     ccc_ext_map[model_id] = float(ccc_value) if ccc_value is not None else float("nan")
                     cwc_map[model_id] = float(cwc_value) if cwc_value is not None else float("nan")
 
-                for row in getattr(self.master_app, "last_internal_results", []) or []:
+                for row in (getattr(self.master_app, "full_internal_results", None) or getattr(self.master_app, "last_internal_results", [])) or []:
                     model_id = self.master_app._safe_int(row.get("Model"))
                     if model_id is None or model_id not in selected_set:
                         continue
                     q2_loo_value = self.master_app._safe_float(row.get("Q2_loo"))
                     q2loo_map[model_id] = float(q2_loo_value) if q2_loo_value is not None else float("nan")
 
-                if self._results_df is not None and not self._results_df.empty and "Model" in self._results_df.columns:
-                    for _, row in self._results_df.iterrows():
+                results_df = self._predictor_keys_results()
+                if results_df is not None and not results_df.empty and "Model" in results_df.columns:
+                    for _, row in results_df.iterrows():
                         model_id = self.master_app._safe_int(row.get("Model"))
                         if model_id is None or model_id not in selected_set:
                             continue
@@ -23007,8 +23309,9 @@ class VariableExplorerTab(ttk.Frame):
             rank_window.protocol("WM_DELETE_WINDOW", lambda: (rank_window.destroy()))
             def _clear_rank_refs(_event: Optional[tk.Event] = None) -> None:
                 nonlocal rank_window_ref, rank_refresh_callback
-                rank_window_ref = None
-                rank_refresh_callback = None
+                if _event is not None and _event.widget is rank_window:
+                    rank_window_ref = None
+                    rank_refresh_callback = None
             rank_window.bind("<Destroy>", _clear_rank_refs, add="+")
             _refresh_ranking_data()
             _sync_top_controls()
@@ -23027,7 +23330,7 @@ class VariableExplorerTab(ttk.Frame):
                 parent=window,
                 title="Save predictor keys plot",
                 defaultextension=".png",
-                initialfile="Desktop_predictor_keys.png",
+                initialfile=_default_export_filename("predictor_frequency", "png", selected_ids[0] if len(selected_ids) == 1 else None),
                 filetypes=[
                     ("PNG image", "*.png"),
                     ("TIFF image", "*.tiff"),
@@ -24023,9 +24326,9 @@ class VariableExplorerTab(ttk.Frame):
             return False
 
         default_name = (
-            f"model_{selected_models[0]}_dataset.csv"
+            f"model_{selected_models[0]}_filtered_dataset.csv"
             if len(selected_models) == 1
-            else "model_range_dataset.csv"
+            else _default_export_filename("models_" + "_".join(str(model) for model in selected_models) + "_filtered_dataset", "csv")
         )
         path = filedialog.asksaveasfilename(
             title="Save filtered dataset",
@@ -24421,7 +24724,11 @@ class VariableExplorerTab(ttk.Frame):
         if self._current_context is None:
             messagebox.showinfo("Save plot", "Load a dataset before saving the plot.")
             return
+        x_label = self._current_axis_labels[0] or self.x_axis_var.get() or "x"
+        y_label = self._current_axis_labels[1] or self.y_axis_var.get() or "y"
+        description = f"histogram_{x_label}" if self.histogram_var.get() else f"scatter_{y_label}_vs_{x_label}"
         path = filedialog.asksaveasfilename(
+            initialfile=_default_export_filename(description, "png", self._current_model_id),
             title="Save plot",
             defaultextension=".png",
             filetypes=(
@@ -25265,7 +25572,9 @@ class VariableExplorerTab(ttk.Frame):
         button_state = "normal" if has_models else "disabled"
         self.create_dataset_button.configure(state=button_state)
         if hasattr(self, "predictor_keys_button") and self.predictor_keys_button is not None:
-            self.predictor_keys_button.configure(state=button_state)
+            self.predictor_keys_button.configure(
+                state="normal" if self._available_model_ids() else "disabled"
+            )
         if not has_models:
             self.dataset_filter_mode_var.set("current")
             self._close_filter_dialog()
@@ -29726,7 +30035,7 @@ class VisualizationTab(ttk.Frame):
             target_results = self._results or ([self._result] if self._result else [])
             if not target_results:
                 return
-            filename = f"y_randomization_model_{target_results[-1].model_id}.csv"
+            filename = f"model_{target_results[-1].model_id}_y_randomization.csv"
             path = filedialog.asksaveasfilename(
                 parent=self,
                 title="Export Y-Randomization data",
@@ -30161,7 +30470,10 @@ class VisualizationTab(ttk.Frame):
         if not self.available:
             messagebox.showinfo("Save plot", "Select a model before saving the plot.")
             return
+        plot_key = self._get_selected_plot_key() or "visualization"
+        dataset = self.dataset_filter.get() or "training"
         path = filedialog.asksaveasfilename(
+            initialfile=_default_export_filename(f"{plot_key}_{dataset}", "png", self.current_model_id),
             title="Save plot",
             defaultextension=".png",
             filetypes=(
@@ -30274,6 +30586,16 @@ class _CLIVisualizationTab(VisualizationTab):
 
     def set_available(self, available: bool) -> None:
         self.available = available
+
+
+def _default_export_filename(description: str, extension: str, model_id: Optional[int] = None) -> str:
+    """Build a descriptive, portable suggested name without changing export content."""
+    label = re.sub(r"[^\w-]+", "_", description.strip(), flags=re.UNICODE).strip("_").lower()
+    label = label[:120].rstrip("_") or "export"
+    if label.upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
+        label = "export_" + label
+    prefix = f"model_{model_id}_" if model_id is not None else ""
+    return f"{prefix}{label}.{extension.lstrip('.')}"
 
 
 def _sanitize_plot_label(label: str) -> str:
