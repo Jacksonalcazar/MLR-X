@@ -673,6 +673,7 @@ class EPRSContext:
     external_y_np: Optional[np.ndarray] = None
     non_variable_columns: tuple[str, ...] = ()
     primary_non_variable_column: Optional[str] = None
+    total_predictor_columns: int = 0
 
 
 @dataclass(frozen=True)
@@ -3676,9 +3677,11 @@ def run_cli(config_path: Union[str, Path], *, output_spec: Optional[CLIOutputSpe
 
     print("*" * 30)
     print(f"Dataset: {Path(config.data_path).name}")
-    print(f"Predictors available: {len(context.cols)}")
+    print(f"Total predictor columns: {context.total_predictor_columns}")
+    print(f"Valid predictor columns: {len(context.cols)}")
     method_display = METHOD_KEY_TO_DISPLAY.get(config.method, config.method)
     print(f"Search method: {method_display}")
+    print(f"CPU cores to use: {config.n_jobs}")
     if (config.method or "").lower() == "eprs":
         print(f"Max predictors per model: {config.max_vars}")
         print(f"Number of seeds: {config.n_seeds}")
@@ -4221,6 +4224,7 @@ def load_dataset(
     if not predictor_indices:
         raise ValueError("No predictor columns remain after applying the configuration.")
 
+    total_predictor_columns = len(predictor_indices)
     predictors = df_full.iloc[:, predictor_indices]
 
     cleaned_predictors: list[pd.Series] = []
@@ -4409,6 +4413,7 @@ def load_dataset(
         full_model_mse,
         non_variable_columns=tuple(non_variable_columns_list),
         primary_non_variable_column=primary_non_variable_column,
+        total_predictor_columns=total_predictor_columns,
     )
 
 
@@ -7027,6 +7032,7 @@ class MLRXApp(tk.Tk):
         self._citation_window: Optional[tk.Toplevel] = None
         self._help_tab_initialized = False
         self._shared_model_selection: str = ""
+        self._pending_shared_model_selections: dict[object, str] = {}
         self._syncing_shared_model_selection = False
         self._suspend_analysis_tab_state_updates = 0
         self._last_efficiency_notice: Optional[str] = None
@@ -7056,9 +7062,14 @@ class MLRXApp(tk.Tk):
                 if tab is None:
                     continue
                 if source is not None and tab is source:
+                    self._pending_shared_model_selections.pop(tab, None)
                     continue
                 apply_selection = getattr(tab, "apply_shared_model_selection", None)
                 if callable(apply_selection):
+                    if str(tab) != self.notebook.select():
+                        self._pending_shared_model_selections[tab] = normalized
+                        continue
+                    self._pending_shared_model_selections.pop(tab, None)
                     apply_selection(normalized)
         finally:
             self._syncing_shared_model_selection = False
@@ -8499,6 +8510,17 @@ class MLRXApp(tk.Tk):
         self._current_tab_id = selected
         if selected == str(self.results_tab):
             self._refresh_results_tab_layout()
+        for tab, model_text in list(self._pending_shared_model_selections.items()):
+            if str(tab) != selected:
+                continue
+            self._pending_shared_model_selections.pop(tab, None)
+            if model_text != self._shared_model_selection:
+                continue
+            self._syncing_shared_model_selection = True
+            try:
+                tab.apply_shared_model_selection(model_text)
+            finally:
+                self._syncing_shared_model_selection = False
 
     def _refresh_results_tab_layout(self):
         self.results_tab.update_idletasks()
@@ -11709,7 +11731,8 @@ class MLRXApp(tk.Tk):
             f"Total observations: {len(context.df_full):,}\n"
             f"Training rows: {len(context.train_df):,}\n"
             f"{test_info}"
-            f"Predictor columns: {len(context.cols):,}\n"
+            f"Total predictor columns: {context.total_predictor_columns:,}\n"
+            f"Valid predictor columns: {len(context.cols):,}\n"
             f"Response column: {context.target_column}\n"
             f"First predictors: {', '.join(context.cols[:5]) + ('...' if len(context.cols) > 5 else '')}"
         )
@@ -12762,7 +12785,7 @@ class MLRXApp(tk.Tk):
     def _select_model_from_models_tab(self, model_id: int) -> None:
         self.selected_model_id = int(model_id)
         self._set_shared_model_selection(str(int(model_id)))
-        self._resort_results_tables()
+        self._resort_results_tables(refresh_analysis_tabs=False)
         self._scroll_models_tables_to_top()
         self._refresh_models_tab_sort_headings()
 
@@ -13083,38 +13106,61 @@ class MLRXApp(tk.Tk):
         }
         return mapping.get(target_metric, "R2")
 
-    def _resort_results_tables(self):
+    def _reorder_models_tree_for_push(self, tree: ttk.Treeview, model_ids: list[int]) -> bool:
+        """Reuse formatted rows when only the selected model and order change."""
+        pinned = getattr(self, "_pinned_models_trees", {}).get(tree)
+        items = {self._safe_int(tree.item(item, "values")[0]): item for item in tree.get_children()}
+        pinned_values = None
+        if pinned is not None and pinned.get_children():
+            pinned_values = pinned.item(pinned.get_children()[0], "values")
+        pinned_id = self._safe_int(pinned_values[0]) if pinned_values else None
+        available = set(items)
+        if pinned_id is not None:
+            available.add(pinned_id)
+        if available != set(model_ids):
+            return False
+        if pinned_values and pinned_id not in items:
+            items[pinned_id] = tree.insert("", "end", values=pinned_values)
+        tree.set_children("", *(items[model_id] for model_id in model_ids))
+        self._sync_pinned_models_row(tree)
+        return True
+
+    def _resort_results_tables(self, *, refresh_analysis_tabs: bool = True):
         if self.last_results_df is not None and not self.last_results_df.empty:
             sorted_df = self._sort_training_dataframe(self.last_results_df)
             self.last_results_df = sorted_df
             self._update_training_order(sorted_df)
-            self._render_training_tree(sorted_df)
-            if hasattr(self, "visual_tab"):
+            model_ids = [self._safe_int(value) for value in sorted_df["Model"].head(self._get_export_limit())]
+            if refresh_analysis_tabs or not self._reorder_models_tree_for_push(self.training_tree, model_ids):
+                self._render_training_tree(sorted_df)
+            if refresh_analysis_tabs and hasattr(self, "visual_tab"):
                 self.visual_tab.update_training_results(sorted_df)
-            if hasattr(self, "variable_tab"):
+            if refresh_analysis_tabs and hasattr(self, "variable_tab"):
                 self.variable_tab.update_results(sorted_df)
-            if hasattr(self, "diagnostics_tab"):
+            if refresh_analysis_tabs and hasattr(self, "diagnostics_tab"):
                 self.diagnostics_tab.update_training_results(sorted_df)
-            if hasattr(self, "summary_tab"):
+            if refresh_analysis_tabs and hasattr(self, "summary_tab"):
                 self.summary_tab.update_training_results(sorted_df)
         else:
             self._clear_pinned_models_row(self.training_tree)
             self.training_tree.delete(*self.training_tree.get_children())
             self._update_training_order(None)
-            if hasattr(self, "visual_tab"):
+            if refresh_analysis_tabs and hasattr(self, "visual_tab"):
                 self.visual_tab.update_training_results(pd.DataFrame())
-            if hasattr(self, "variable_tab"):
+            if refresh_analysis_tabs and hasattr(self, "variable_tab"):
                 self.variable_tab.update_results(pd.DataFrame())
-            if hasattr(self, "diagnostics_tab"):
+            if refresh_analysis_tabs and hasattr(self, "diagnostics_tab"):
                 self.diagnostics_tab.update_training_results(pd.DataFrame())
-            if hasattr(self, "summary_tab"):
+            if refresh_analysis_tabs and hasattr(self, "summary_tab"):
                 self.summary_tab.update_training_results(pd.DataFrame())
 
         if self.last_internal_results:
             sorted_internal = self._sort_internal_results(self.last_internal_results)
             self.last_internal_results = sorted_internal
-            self._render_internal_tree(sorted_internal)
-            if hasattr(self, "summary_tab"):
+            model_ids = [self._safe_int(row.get("Model")) for row in sorted_internal[:self._get_export_limit()]]
+            if refresh_analysis_tabs or not self._reorder_models_tree_for_push(self.internal_results_tree, model_ids):
+                self._render_internal_tree(sorted_internal)
+            if refresh_analysis_tabs and hasattr(self, "summary_tab"):
                 self.summary_tab.update_internal_results(sorted_internal)
         else:
             self._configure_internal_results_tree(simple=True)
@@ -13124,8 +13170,10 @@ class MLRXApp(tk.Tk):
         if self.last_external_results:
             sorted_external = self._sort_external_results(self.last_external_results)
             self.last_external_results = sorted_external
-            self._render_external_tree(sorted_external)
-            if hasattr(self, "summary_tab"):
+            model_ids = [self._safe_int(row.get("Model")) for row in sorted_external[:self._get_export_limit()]]
+            if refresh_analysis_tabs or not self._reorder_models_tree_for_push(self.external_results_tree, model_ids):
+                self._render_external_tree(sorted_external)
+            if refresh_analysis_tabs and hasattr(self, "summary_tab"):
                 self.summary_tab.update_external_results(sorted_external)
         else:
             self._clear_pinned_models_row(self.external_results_tree)
@@ -13770,7 +13818,8 @@ class MLRXApp(tk.Tk):
         lines.append(f"Dataset: {config.data_path}")
         lines.append(f"CSV delimiter: {delimiter_display}")
         lines.append(f"Target column: {context.target_column}")
-        lines.append(f"Predictor columns: {len(context.cols)}")
+        lines.append(f"Total predictor columns: {context.total_predictor_columns}")
+        lines.append(f"Valid predictor columns: {len(context.cols)}")
         method_display = METHOD_KEY_TO_DISPLAY.get(config.method, config.method)
         lines.append(f"Method: {method_display}")
         if config.exclude_constant:
