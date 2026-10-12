@@ -17463,6 +17463,8 @@ class SummaryTab(ttk.Frame):
     INFO_FIELDS: tuple[tuple[str, str], ...] = (
         ("Regression", "regression"),
         ("Covariance type", "cov_type"),
+        ("Total input predictors", "total_predictor_columns"),
+        ("Valid predictors available", "valid_predictor_columns"),
         ("Search method", "search_method"),
         ("Max iterations/seed", "iterations"),
         ("Used target metric", "target_metric"),
@@ -18005,7 +18007,15 @@ class SummaryTab(ttk.Frame):
             }
         self._refresh_summary()
 
+    def _update_predictor_counts(self) -> None:
+        context = self.context
+        total = getattr(context, "total_predictor_columns", None)
+        valid = len(context.cols) if context is not None else None
+        self.info_vars["total_predictor_columns"].set(str(total) if total is not None else "-")
+        self.info_vars["valid_predictor_columns"].set(str(valid) if valid is not None else "-")
+
     def _reset_info(self) -> None:
+        self._update_predictor_counts()
         self.info_vars["regression"].set("OLS")
         self.info_vars["search_method"].set(self._resolve_search_method_description())
         self.info_vars["target_metric"].set(self._resolve_target_metric_label())
@@ -18527,6 +18537,7 @@ class SummaryTab(ttk.Frame):
         }
 
     def _refresh_summary(self) -> None:
+        self._update_predictor_counts()
         model_id = self._get_selected_model_id()
         self._covariance_diagnosis = None
         self.info_vars["search_method"].set(self._resolve_search_method_description())
