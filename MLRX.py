@@ -23783,7 +23783,7 @@ class VariableExplorerTab(ttk.Frame):
             )
             return
 
-        if not self._model_variables:
+        if not self._available_model_ids():
             messagebox.showinfo(
                 "Filtered dataset",
                 "Model results are required before creating a filtered dataset.",
@@ -24244,6 +24244,18 @@ class VariableExplorerTab(ttk.Frame):
         if self._create_filtered_dataset():
             self._close_filter_dialog()
 
+    def _filtered_dataset_model_variables(self) -> dict[int, list[str]]:
+        results = self._predictor_keys_results()
+        if results is None or results.empty:
+            return {}
+        model_variables: dict[int, list[str]] = {}
+        for _, row in results.iterrows():
+            model_id = self.master_app._safe_int(row.get("Model"))
+            variables = self.master_app._normalize_variables(row.get("Predictors"))
+            if model_id is not None and variables:
+                model_variables[model_id] = list(variables)
+        return model_variables
+
     def _create_filtered_dataset(self) -> bool:
         if self._current_context is None:
             messagebox.showinfo(
@@ -24252,7 +24264,8 @@ class VariableExplorerTab(ttk.Frame):
             )
             return False
 
-        if not self._model_variables:
+        model_variables = self._filtered_dataset_model_variables()
+        if not model_variables:
             messagebox.showinfo(
                 "Filtered dataset",
                 "Model results are required before creating a filtered dataset.",
@@ -24274,7 +24287,8 @@ class VariableExplorerTab(ttk.Frame):
 
         if mode == "range":
             try:
-                model_ids = self._parse_model_id_selection(self.model_range_start_var.get())
+                model_selection_text = self.model_range_start_var.get()
+                model_ids = self._parse_model_id_selection(model_selection_text)
             except ValueError as exc:
                 messagebox.showerror(
                     "Multiple models",
@@ -24283,7 +24297,7 @@ class VariableExplorerTab(ttk.Frame):
                 return False
             available: list[int] = []
             for model_id in model_ids:
-                if model_id in self._model_variables:
+                if model_id in model_variables:
                     available.append(model_id)
                 else:
                     missing_models.append(model_id)
@@ -24310,7 +24324,7 @@ class VariableExplorerTab(ttk.Frame):
                     "The model identifier must be numeric.",
                 )
                 return False
-            if model_id not in self._model_variables:
+            if model_id not in model_variables:
                 messagebox.showerror(
                     "Filtered dataset",
                     "The specified model was not found in the results.",
@@ -24321,7 +24335,7 @@ class VariableExplorerTab(ttk.Frame):
         variable_order: list[str] = []
         seen_variables: set[str] = set()
         for model_id in selected_models:
-            for variable in self._model_variables.get(model_id, []):
+            for variable in model_variables.get(model_id, []):
                 if variable not in seen_variables:
                     seen_variables.add(variable)
                     variable_order.append(variable)
@@ -24386,9 +24400,9 @@ class VariableExplorerTab(ttk.Frame):
             return False
 
         default_name = (
-            f"model_{selected_models[0]}_filtered_dataset.csv"
-            if len(selected_models) == 1
-            else _default_export_filename("models_" + "_".join(str(model) for model in selected_models) + "_filtered_dataset", "csv")
+            f"Filtered_dataset_based_on_models_{model_selection_text}.csv"
+            if mode == "range"
+            else f"Filtered_dataset_based_on_model_{selected_models[0]}.csv"
         )
         path = filedialog.asksaveasfilename(
             title="Save filtered dataset",
@@ -25629,13 +25643,13 @@ class VariableExplorerTab(ttk.Frame):
             self.axis_source_var.set("all")
             self.model_entry.configure(state="disabled")
         self.model_radio.configure(state=state)
-        button_state = "normal" if has_models else "disabled"
-        self.create_dataset_button.configure(state=button_state)
+        has_export_models = bool(self._available_model_ids())
+        self.create_dataset_button.configure(state="normal" if has_export_models else "disabled")
         if hasattr(self, "predictor_keys_button") and self.predictor_keys_button is not None:
             self.predictor_keys_button.configure(
                 state="normal" if self._available_model_ids() else "disabled"
             )
-        if not has_models:
+        if not has_export_models:
             self.dataset_filter_mode_var.set("current")
             self._close_filter_dialog()
         self._handle_dataset_filter_mode_change()
