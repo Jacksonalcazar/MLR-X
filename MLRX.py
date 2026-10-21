@@ -674,6 +674,7 @@ class EPRSContext:
     non_variable_columns: tuple[str, ...] = ()
     primary_non_variable_column: Optional[str] = None
     total_predictor_columns: int = 0
+    original_df: Optional[pd.DataFrame] = None
 
 
 @dataclass(frozen=True)
@@ -964,6 +965,20 @@ def _write_results_csv(
     sep: str = ";",
     float_format: str = "%.4f",
 ) -> Path:
+    # Search may need LOO scores for ranking even when validation is disabled.
+    # Only the explicit validation choice controls whether those scores are exported.
+    validation = metadata.get("validation")
+    export_loo = (
+        bool(validation.get("loo", False))
+        if isinstance(validation, dict)
+        else bool(metadata.get("validation_loo", False))
+    )
+    if not export_loo:
+        export_df = export_df.drop(
+            columns=["Q2_loo", "RMSE_loo", "s_loo", "CCC_loo", "MAE_loo"],
+            errors="ignore",
+        )
+
     metadata_value = _serialize_metadata(metadata)
     header_values = list(export_df.columns) + [metadata_value, "#"]
 
@@ -3681,6 +3696,8 @@ def run_cli(config_path: Union[str, Path], *, output_spec: Optional[CLIOutputSpe
     print(f"Valid predictor columns: {len(context.cols)}")
     method_display = METHOD_KEY_TO_DISPLAY.get(config.method, config.method)
     print(f"Search method: {method_display}")
+    print("Target metric: " + TARGET_METRIC_DISPLAY.get(config.target_metric, config.target_metric))
+    print("Target metric cutoff: " + _format_threshold_display(config.tm_cutoff))
     print(f"CPU cores to use: {config.n_jobs}")
     if (config.method or "").lower() == "eprs":
         print(f"Max predictors per model: {config.max_vars}")
@@ -4115,6 +4132,7 @@ def load_dataset(
 ) -> EPRSContext:
     df_full = pd.read_csv(path, delimiter=delimiter)
     df_full.columns = [col.strip() if isinstance(col, str) else col for col in df_full.columns]
+    original_df = df_full.copy()
     if df_full.shape[1] < 3:
         raise ValueError("Dataset must contain at least an ID, predictors, and a target column.")
 
@@ -4414,6 +4432,7 @@ def load_dataset(
         non_variable_columns=tuple(non_variable_columns_list),
         primary_non_variable_column=primary_non_variable_column,
         total_predictor_columns=total_predictor_columns,
+        original_df=original_df,
     )
 
 
@@ -22202,6 +22221,7 @@ class _InteractiveLabelManager:
         self.figure = canvas.figure
         self._format_label = label_formatter
         self._visibility: dict[object, bool] = {}
+        # Annotation offsets are in points so export DPI cannot shrink them.
         self._positions: dict[tuple[str, object], tuple[float, float]] = {}
         self._active_plot_key: Optional[str] = None
         self._active_axes: Optional[Axes] = None
@@ -22280,13 +22300,16 @@ class _InteractiveLabelManager:
         info, index = entries[0]
         x = float(info.x[index])
         y = float(info.y[index])
-        offset = self._positions.get((self._active_plot_key, observation_id), self._DEFAULT_OFFSET)
+        offset = self._positions.setdefault(
+            (self._active_plot_key, observation_id),
+            tuple(value * 72.0 / self.figure.dpi for value in self._DEFAULT_OFFSET),
+        )
         annotation = self._active_axes.annotate(
             self._format_label(observation_id),
             xy=(x, y),
             xycoords="data",
             xytext=offset,
-            textcoords="offset pixels",
+            textcoords="offset points",
             fontsize=9,
             ha="left",
             va="bottom",
@@ -22343,7 +22366,8 @@ class _InteractiveLabelManager:
                 if event.x is None or event.y is None:
                     continue
                 point_x, point_y = self._active_axes.transData.transform(annotation.xy)
-                offset_x, offset_y = entry.offset
+                pixels_per_point = self.figure.dpi / 72.0
+                offset_x, offset_y = (value * pixels_per_point for value in entry.offset)
                 self._drag_state = _DragState(
                     observation_id=observation_id,
                     annotation=entry,
@@ -22381,6 +22405,10 @@ class _InteractiveLabelManager:
             distance = math.hypot(float(event.x) - self._drag_state.origin[0], float(event.y) - self._drag_state.origin[1])
             if distance > 1.0:
                 self._drag_state.moved = True
+        # Mouse coordinates are pixels; Matplotlib annotation offsets are points.
+        points_per_pixel = 72.0 / self.figure.dpi
+        dx *= points_per_pixel
+        dy *= points_per_pixel
         entry = self._drag_state.annotation
         entry.artist.set_position((dx, dy))
         entry.offset = (dx, dy)
@@ -22591,6 +22619,26 @@ class _AxisLabelDialog(simpledialog.Dialog):
 
 
 
+_SUPERSUB_PATTERN = re.compile(
+    r"(?<!\\)(?P<op>[\^_])(?:\{(?P<braced>[^{}]*)\}|(?P<single>[^\s\^_{}$]+))"
+)
+
+
+def _format_axis_label_markup(label: str) -> str:
+    """Render inserted scripts with Matplotlib MathText on every platform."""
+    def convert(part: str) -> str:
+        def replacer(match: re.Match[str]) -> str:
+            text = match.group("braced") or match.group("single")
+            if not text:
+                return ""
+            return "$" + match.group("op") + "{" + text + "}$"
+        return _SUPERSUB_PATTERN.sub(replacer, part).replace(r"\_", "_").replace(r"\^", "^")
+
+    # Preserve explicit math expressions while formatting scripts in plain text.
+    parts = re.split(r"(?<!\\)(\$(?:\\.|[^$])*?(?<!\\)\$)", label)
+    return "".join(part if part.startswith("$") else convert(part) for part in parts)
+
+
 class VariableExplorerTab(ttk.Frame):
     COLOR_CHOICES: tuple[tuple[str, Optional[str]], ...] = (
         ("Default", None),
@@ -22663,6 +22711,9 @@ class VariableExplorerTab(ttk.Frame):
         self.bin_mode_var = tk.StringVar(value="count")
         self.bin_edges_var = tk.StringVar(value="")
         self.bin_linewidth_var = tk.StringVar(value="1.2")
+        self.bin_percentage_only_var = tk.BooleanVar(value=False)
+        self.bin_range_decimals_var = tk.StringVar(value="2")
+        self.bin_percentage_decimals_var = tk.StringVar(value="1")
         self.bar_color_var = tk.StringVar(value="Default")
         self.histogram_check: Optional[ttk.Checkbutton] = None
         self.legend_check: Optional[ttk.Checkbutton] = None
@@ -22704,6 +22755,7 @@ class VariableExplorerTab(ttk.Frame):
         self.dataset_filter_mode_var = tk.StringVar(value="current")
         self.model_range_start_var = tk.StringVar(value="")
         self.model_range_end_var = tk.StringVar(value="")
+        self._axis_label_keys: Optional[tuple[tuple[str, bool], tuple[str, bool]]] = None
         self.custom_xlabel: Optional[str] = None
         self.custom_ylabel: Optional[str] = None
         self.axis_label_fontsize: Optional[float] = None
@@ -22952,6 +23004,30 @@ class VariableExplorerTab(ttk.Frame):
         linewidth_combo.grid(row=0, column=1, sticky="w", padx=(8, 0))
         controls["linewidth_combo"] = linewidth_combo
 
+        decimals_frame = ttk.LabelFrame(container, text="Decimal places")
+        decimals_frame.pack(fill="x", pady=(0, 10))
+        for row, (label, variable, key) in enumerate((
+            ("Ranges:", self.bin_range_decimals_var, "range_decimals_spin"),
+            ("Percentages:", self.bin_percentage_decimals_var, "percentage_decimals_spin"),
+        )):
+            ttk.Label(decimals_frame, text=label).grid(
+                row=row, column=0, sticky="w", pady=(0 if row == 0 else 6, 0)
+            )
+            spin = ttk.Spinbox(
+                decimals_frame, from_=0, to=10, increment=1,
+                textvariable=variable, width=5,
+            )
+            spin.grid(row=row, column=1, sticky="w", padx=(8, 0), pady=(0 if row == 0 else 6, 0))
+            controls[key] = spin
+
+        percentage_only_check = ttk.Checkbutton(
+            container,
+            text="Percentage only",
+            variable=self.bin_percentage_only_var,
+        )
+        percentage_only_check.pack(anchor="w", pady=(0, 10))
+        controls["percentage_only_check"] = percentage_only_check
+
         apply_btn = ttk.Button(container, text="Apply", command=self._apply_bin_settings)
         apply_btn.pack(anchor="e")
         controls["apply_btn"] = apply_btn
@@ -23195,14 +23271,14 @@ class VariableExplorerTab(ttk.Frame):
                 variable=top_filter_enabled_var,
             )
             top_filter_check.pack(side="left")
-            top_count_entry = ttk.Entry(controls, textvariable=top_count_var, width=6, state="disabled")
+            top_count_entry = ttk.Entry(controls, textvariable=top_count_var, width=6, state="normal")
             top_count_entry.pack(side="left", padx=(6, 6))
             ttk.Label(controls, text="by").pack(side="left")
             top_metric_combo = ttk.Combobox(
                 controls,
                 textvariable=top_metric_var,
-                state="disabled",
-                values=("CCC (ext)", "CWC", "Q2LOO"),
+                state="readonly",
+                values=("CCC (ext)", "CWC", "Q²LOO"),
                 width=12,
             )
             top_metric_combo.pack(side="left", padx=(6, 0))
@@ -23275,25 +23351,15 @@ class VariableExplorerTab(ttk.Frame):
                             q2_loo_value = self.master_app._safe_float(row.get("Q2_loo"))
                             q2loo_map[model_id] = float(q2_loo_value) if q2_loo_value is not None else float("nan")
 
-                available_metrics = []
-                if any(np.isfinite(value) for value in ccc_ext_map.values()):
-                    available_metrics.append("CCC (ext)")
-                if any(np.isfinite(value) for value in cwc_map.values()):
-                    available_metrics.append("CWC")
-                if any(np.isfinite(value) for value in q2loo_map.values()):
-                    available_metrics.append("Q²LOO")
-
+                # Ranking preferences do not depend on the search target metric
+                # or on whether every validation metric has been computed.
+                available_metrics = ["CCC (ext)", "CWC", "Q²LOO"]
                 top_metric_combo.configure(values=tuple(available_metrics))
-                if available_metrics:
-                    if top_metric_var.get() not in available_metrics:
-                        top_metric_var.set(available_metrics[0])
-                else:
-                    top_metric_var.set("")
+                if top_metric_var.get() not in available_metrics:
+                    top_metric_var.set(available_metrics[0])
 
             def _ordered_ranking() -> list[tuple[int, int]]:
                 if not top_filter_enabled_var.get():
-                    return ranking
-                if len(available_metrics) < 3:
                     return ranking
                 try:
                     top_n = max(1, int(str(top_count_var.get()).strip()))
@@ -23330,24 +23396,9 @@ class VariableExplorerTab(ttk.Frame):
                 return sorted(top_subset, key=lambda pair: (-float(pair[1]), pair[0]))
 
             def _sync_top_controls() -> None:
-                allow_filter = len(available_metrics) >= 3
-                state = "normal" if top_filter_enabled_var.get() and allow_filter else "disabled"
-                try:
-                    top_filter_check.configure(state="normal" if allow_filter else "disabled")
-                except Exception:  # noqa: BLE001
-                    pass
-                try:
-                    top_count_entry.configure(state=state)
-                except Exception:  # noqa: BLE001
-                    pass
-                try:
-                    top_metric_combo.configure(
-                        state="readonly" if state == "normal" and bool(available_metrics) else "disabled"
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
-                if not allow_filter:
-                    top_filter_enabled_var.set(False)
+                top_filter_check.configure(state="normal")
+                top_count_entry.configure(state="normal")
+                top_metric_combo.configure(state="readonly")
 
             def _render_rank_table() -> None:
                 for item_id in tree.get_children():
@@ -23461,6 +23512,20 @@ class VariableExplorerTab(ttk.Frame):
         self._bin_settings_controls.clear()
 
     def _apply_bin_settings(self) -> None:
+        for label, variable in (
+            ("Ranges", self.bin_range_decimals_var),
+            ("Percentages", self.bin_percentage_decimals_var),
+        ):
+            try:
+                decimals = int(variable.get().strip())
+            except ValueError:
+                decimals = -1
+            if not 0 <= decimals <= 10:
+                messagebox.showerror(
+                    "Invalid decimal places", f"{label}: enter an integer from 0 to 10."
+                )
+                return
+
         mode = self.bin_mode_var.get()
         if mode == "count":
             try:
@@ -23963,6 +24028,7 @@ class VariableExplorerTab(ttk.Frame):
         self._axis_user_override = {"x": False, "y": False}
         self._axis_parameters = {"x": None, "y": None}
         self._stored_limits = {"x": None, "y": None}
+        self._axis_label_keys = None
         self.custom_xlabel = None
         self.custom_ylabel = None
         self.axis_label_fontsize = None
@@ -24273,11 +24339,11 @@ class VariableExplorerTab(ttk.Frame):
             return False
 
         context = self._current_context
-        df = context.train_df
+        df = context.original_df if context.original_df is not None else context.df_full
         if df.empty:
             messagebox.showinfo(
                 "Filtered dataset",
-                "The training dataset is empty. Nothing to export.",
+                "The dataset is empty. Nothing to export.",
             )
             return False
 
@@ -24389,9 +24455,9 @@ class VariableExplorerTab(ttk.Frame):
         ):
             columns_to_keep.append(target_column)
 
-        export_columns = [
-            column for column in columns_to_keep if column != observation_column
-        ]
+        # Preserve the source column order, including the union of multiple models.
+        # The original frame contains no generated observation/ID columns.
+        export_columns = [column for column in df.columns if column in columns_to_keep]
         if not export_columns:
             messagebox.showinfo(
                 "Filtered dataset",
@@ -24663,6 +24729,19 @@ class VariableExplorerTab(ttk.Frame):
             return edges
         return self._resolve_bar_count(max_count)
 
+    def _histogram_decimal_places(self) -> tuple[int, int]:
+        # Incomplete entry edits must not break redraws before Apply is pressed.
+        values = []
+        for variable, default in (
+            (self.bin_range_decimals_var, 2), (self.bin_percentage_decimals_var, 1)
+        ):
+            try:
+                value = int(variable.get().strip())
+            except ValueError:
+                value = default
+            values.append(value if 0 <= value <= 10 else default)
+        return values[0], values[1]
+
     def _plot_histogram(self, x_values: np.ndarray, bar_color: str) -> bool:
         if x_values.size == 0:
             self._clear_plot("No data points available for the histogram.")
@@ -24715,11 +24794,13 @@ class VariableExplorerTab(ttk.Frame):
             rect.set_alpha(0.8)
             rect.set_zorder(3)
 
+        range_decimals, percentage_decimals = self._histogram_decimal_places()
+
         def _format_interval_bound(value: float) -> str:
             if not math.isfinite(value):
                 return ""
-            text = f"{value:.2f}"
-            return "0.00" if text == "-0.00" else text
+            text = f"{value:.{range_decimals}f}"
+            return f"{0:.{range_decimals}f}" if float(text) == 0 else text
 
         tick_positions = starts + (widths / 2.0)
         interval_labels = []
@@ -24737,8 +24818,13 @@ class VariableExplorerTab(ttk.Frame):
                 continue
             height = rect.get_height()
             label_text = interval_labels[idx]
+            annotation_text = (
+                f"{percent:.{percentage_decimals}f}%"
+                if self.bin_percentage_only_var.get()
+                else f"{label_text}: {percent:.{percentage_decimals}f}%"
+            )
             annotation = self.ax.annotate(
-                f"{label_text}: {percent:.1f}%",
+                annotation_text,
                 xy=(rect.get_x() + rect.get_width() / 2.0, height),
                 xycoords="data",
                 xytext=(0.0, 4.0),
@@ -24784,7 +24870,7 @@ class VariableExplorerTab(ttk.Frame):
             title="Axis labels",
             initial_x=base_x,
             initial_y=base_y,
-            initial_font_size=self.axis_label_fontsize,
+            initial_font_size=self.ax.xaxis.label.get_fontsize(),
         )
         if dialog.result is None:
             return
@@ -24798,11 +24884,20 @@ class VariableExplorerTab(ttk.Frame):
         if self._current_context is None:
             messagebox.showinfo("Save plot", "Load a dataset before saving the plot.")
             return
-        x_label = self._current_axis_labels[0] or self.x_axis_var.get() or "x"
-        y_label = self._current_axis_labels[1] or self.y_axis_var.get() or "y"
+        x_key, y_key = self._get_selected_axis_keys() or (None, None)
+        target = self._current_context.target_column
+        label_keys = self._axis_label_keys
+        x_label = _axis_export_label(
+            self._current_axis_labels[0] or self.x_axis_var.get() or "x", x_key, target,
+            partial_residual=bool(label_keys and label_keys[0][1]),
+        )
+        y_label = _axis_export_label(
+            self._current_axis_labels[1] or self.y_axis_var.get() or "y", y_key, target,
+            partial_residual=bool(label_keys and label_keys[1][1]),
+        )
         description = f"histogram_{x_label}" if self.histogram_var.get() else f"scatter_{y_label}_vs_{x_label}"
         path = filedialog.asksaveasfilename(
-            initialfile=_default_export_filename(description, "png", self._current_model_id),
+            initialfile=_default_export_filename(description, "png", self._current_model_id, preserve_case=True),
             title="Save plot",
             defaultextension=".png",
             filetypes=(
@@ -24897,6 +24992,11 @@ class VariableExplorerTab(ttk.Frame):
                 x_label = x_override
             if y_override:
                 y_label = y_override
+        self._sync_axis_label_variables(
+            x_key, "__frequency__" if self.histogram_var.get() else y_key,
+            x_partial=bool(label_overrides and label_overrides[0]),
+            y_partial=bool(label_overrides and label_overrides[1]),
+        )
         mask = np.isfinite(x_values) & np.isfinite(y_values)
         if not mask.any():
             self._clear_plot("No finite data points for the selected axes.")
@@ -25558,14 +25658,28 @@ class VariableExplorerTab(ttk.Frame):
         else:
             ax.grid(False)
 
+    def _sync_axis_label_variables(
+        self, x_key: str, y_key: str, *, x_partial: bool = False, y_partial: bool = False
+    ) -> None:
+        """Reset a custom label when its variable or residual representation changes."""
+        x_identity = (x_key, x_partial)
+        y_identity = (y_key, y_partial)
+        if self._axis_label_keys is not None:
+            previous_x, previous_y = self._axis_label_keys
+            if x_identity != previous_x:
+                self.custom_xlabel = None
+            if y_identity != previous_y:
+                self.custom_ylabel = None
+        self._axis_label_keys = (x_identity, y_identity)
+
     def _apply_axis_labels(self, xlabel: str, ylabel: str) -> tuple[str, str]:
-        applied_x = self.custom_xlabel if self.custom_xlabel else xlabel
-        applied_y = self.custom_ylabel if self.custom_ylabel else ylabel
+        applied_x = _format_axis_label_markup(self.custom_xlabel) if self.custom_xlabel else xlabel
+        applied_y = _format_axis_label_markup(self.custom_ylabel) if self.custom_ylabel else ylabel
         font_kwargs: dict[str, float] = {}
         if self.axis_label_fontsize is not None:
             font_kwargs["fontsize"] = self.axis_label_fontsize
-        self.ax.set_xlabel(applied_x, **font_kwargs)
-        self.ax.set_ylabel(applied_y, **font_kwargs)
+        self.ax.set_xlabel(applied_x, parse_math=True, usetex=False, **font_kwargs)
+        self.ax.set_ylabel(applied_y, parse_math=True, usetex=False, **font_kwargs)
         return applied_x, applied_y
 
     def _sanitize_array(self, values: Optional[Union[np.ndarray, list, tuple]]) -> np.ndarray:
@@ -27220,9 +27334,15 @@ class VisualizationTab(ttk.Frame):
             "h_line_color": str(self.h_line_color_var.get()),
             "gridline": bool(self.gridline_var.get()),
             "label_mode": str(self.label_mode_var.get()),
+            "custom_xlabel": self.custom_xlabel,
+            "custom_ylabel": self.custom_ylabel,
+            "axis_label_fontsize": self.axis_label_fontsize,
         }
 
     def _apply_plot_option_state(self, state: dict[str, Any]) -> None:
+        self.custom_xlabel = state.get("custom_xlabel")
+        self.custom_ylabel = state.get("custom_ylabel")
+        self.axis_label_fontsize = state.get("axis_label_fontsize")
         self.identity_var.set(bool(state.get("identity", self.identity_var.get())))
         self.legend_var.set(bool(state.get("legend", self.legend_var.get())))
         self.legend_location_var.set(str(state.get("legend_location", self.legend_location_var.get())))
@@ -27839,40 +27959,13 @@ class VisualizationTab(ttk.Frame):
         font_kwargs: dict[str, float] = {}
         if self.axis_label_fontsize is not None:
             font_kwargs["fontsize"] = self.axis_label_fontsize
-        self.ax.set_xlabel(xlabel, **font_kwargs)
-        self.ax.set_ylabel(ylabel, **font_kwargs)
+        self.ax.set_xlabel(xlabel, parse_math=True, usetex=False, **font_kwargs)
+        self.ax.set_ylabel(ylabel, parse_math=True, usetex=False, **font_kwargs)
         self._current_axis_labels = (xlabel, ylabel)
 
-    _SUPERSUB_PATTERN = re.compile(
-        r"(?<!\\)(?P<op>[\^_])(?:\{(?P<braced>[^{}]+)\}|(?P<single>[^\s\^_{}$]+))"
-    )
-
-    @classmethod
-    def _format_axis_label_markup(cls, label: str) -> str:
-        if not label:
-            return label
-        if "$" in label:
-            return label
-
-        placeholders = {"\\^": "\uFFF0", "\\_": "\uFFF1"}
-        for key, value in placeholders.items():
-            label = label.replace(key, value)
-
-        def replacer(match: re.Match[str]) -> str:
-            op = match.group("op")
-            text = match.group("braced") or match.group("single")
-            if not text:
-                return match.group(0)
-            if op == "^":
-                return "$^{" + text + "}$"
-            return "$_{" + text + "}$"
-
-        converted = cls._SUPERSUB_PATTERN.sub(replacer, label)
-
-        for key, value in placeholders.items():
-            converted = converted.replace(value, key[-1])
-
-        return converted
+    @staticmethod
+    def _format_axis_label_markup(label: str) -> str:
+        return _format_axis_label_markup(label)
 
     def _format_observation_label(self, observation: object) -> str:
         if isinstance(observation, _PointIdentity):
@@ -28036,6 +28129,10 @@ class VisualizationTab(ttk.Frame):
             if state is not None:
                 self._apply_plot_option_state(state)
             else:
+                # A newly selected chart starts with its own default axis labels.
+                self.custom_xlabel = None
+                self.custom_ylabel = None
+                self.axis_label_fontsize = None
                 initial_state = self._snapshot_plot_option_state()
                 if plot_key in self.IDENTITY_SUPPORTED:
                     initial_state["identity"] = True
@@ -30530,7 +30627,7 @@ class VisualizationTab(ttk.Frame):
             title="Axis labels",
             initial_x=default_x,
             initial_y=default_y,
-            initial_font_size=self.axis_label_fontsize,
+            initial_font_size=self.ax.xaxis.label.get_fontsize(),
         )
         if dialog.result is None:
             return
@@ -30662,9 +30759,28 @@ class _CLIVisualizationTab(VisualizationTab):
         self.available = available
 
 
-def _default_export_filename(description: str, extension: str, model_id: Optional[int] = None) -> str:
+def _axis_export_label(
+    label: str, axis_key: Optional[str], target_column: str, *, partial_residual: bool = False
+) -> str:
+    """Use the variable role for response axes and plain text for script markup."""
+    if axis_key == target_column:
+        return "Partial_residual_of_response" if partial_residual else "response"
+    if axis_key == "__observations__":
+        return "observations"
+    # Accept both dialog markup (D_{a}) and rendered MathText (D$_{a}$).
+    plain = label.replace("$", "")
+    return _SUPERSUB_PATTERN.sub(
+        lambda match: match.group("braced") or match.group("single") or "", plain
+    ).replace(r"\_", "_").replace(r"\^", "^")
+
+
+def _default_export_filename(
+    description: str, extension: str, model_id: Optional[int] = None, *, preserve_case: bool = False
+) -> str:
     """Build a descriptive, portable suggested name without changing export content."""
-    label = re.sub(r"[^\w-]+", "_", description.strip(), flags=re.UNICODE).strip("_").lower()
+    label = re.sub(r"[^\w-]+", "_", description.strip(), flags=re.UNICODE).strip("_")
+    if not preserve_case:
+        label = label.lower()
     label = label[:120].rstrip("_") or "export"
     if label.upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
         label = "export_" + label
